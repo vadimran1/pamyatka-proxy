@@ -21,8 +21,13 @@ PROVIDER_OK = (not _raw) or (_raw in KNOWN)
 # Ключи можно держать оба сразу — берётся тот, что подходит выбранной
 # сети. Так переключение это одна строчка PAMYATKA_PROVIDER, а не
 # перевставка ключа (и не ошибка «ключ от другой сети»).
-KEY = (os.environ.get("PAMYATKA_KEY_" + PROVIDER.upper(), "").strip()
-       or os.environ.get("PAMYATKA_KEY", "").strip())
+def key_for(provider):
+    """Ключ под конкретную сеть, иначе общий."""
+    return (os.environ.get("PAMYATKA_KEY_" + provider.upper(), "").strip()
+            or os.environ.get("PAMYATKA_KEY", "").strip())
+
+
+KEY = key_for(PROVIDER)
 MODEL = os.environ.get("PAMYATKA_MODEL", "").strip()
 SECRET = os.environ.get("PAMYATKA_SECRET", "").strip()
 RATE_N = int(os.environ.get("PAMYATKA_RATE", "20") or 20)
@@ -125,17 +130,19 @@ def _prompt(question, context, catalog):
     return "\n\n=====\n\n".join(parts)
 
 
-def ask_model(question, context, catalog):
-    model = MODEL or DEFAULTS.get(PROVIDER, "")
+def ask_model(question, context, catalog, provider=None, key=None):
+    provider = provider or PROVIDER
+    key = key or key_for(provider)
+    model = MODEL or DEFAULTS.get(provider, "")
     prompt = _prompt(question, context, catalog)
-    if PROVIDER == "deepseek":
+    if provider == "deepseek":
         data = _post("https://api.deepseek.com/chat/completions",
                      {"model": model,
                       "messages": [{"role": "system", "content": SYSTEM},
                                    {"role": "user", "content": prompt}],
                       "temperature": 0.2, "max_tokens": 700,
                       "stream": False},
-                     {"Authorization": "Bearer " + KEY})
+                     {"Authorization": "Bearer " + key})
         ch = (data.get("choices") or [{}])[0]
         return ((ch.get("message") or {}).get("content") or "").strip()
     data = _post(
@@ -144,7 +151,7 @@ def ask_model(question, context, catalog):
         {"systemInstruction": {"parts": [{"text": SYSTEM}]},
          "contents": [{"role": "user", "parts": [{"text": prompt}]}],
          "generationConfig": {"temperature": 0.2, "maxOutputTokens": 700}},
-        {"x-goog-api-key": KEY})
+        {"x-goog-api-key": key})
     cands = data.get("candidates") or []
     if not cands:
         return ""
@@ -174,9 +181,6 @@ class handler(BaseHTTPRequestHandler):
         self._send(200, out)
 
     def do_POST(self):
-        if not KEY:
-            return self._send(500, {"error": "на сервере не задан ключ "
-                                             "(переменная PAMYATKA_KEY)"})
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
@@ -200,9 +204,18 @@ class handler(BaseHTTPRequestHandler):
         if not question:
             return self._send(400, {"error": "пустой вопрос"})
 
+        # сеть выбирает пользователь в программе; чужое значение не берём
+        want = (payload.get("provider") or "").strip().lower()
+        provider = want if want in KNOWN else PROVIDER
+        key = key_for(provider)
+        if not key:
+            return self._send(500, {
+                "error": "на сервере нет ключа для сети %s — добавьте "
+                         "PAMYATKA_KEY_%s" % (provider, provider.upper())})
+
         try:
             answer = ask_model(question, payload.get("context") or "",
-                               payload.get("catalog") or "")
+                               payload.get("catalog") or "", provider, key)
         except urllib.error.HTTPError as e:
             try:
                 msg = json.loads(e.read().decode("utf-8"))
@@ -219,4 +232,4 @@ class handler(BaseHTTPRequestHandler):
                                              % e})
         if not answer:
             return self._send(502, {"error": "модель вернула пустой ответ"})
-        self._send(200, {"answer": answer, "provider": PROVIDER})
+        self._send(200, {"answer": answer, "provider": provider})
