@@ -394,10 +394,21 @@ class handler(BaseHTTPRequestHandler):
                     429: "лимит запросов исчерпан"}.get(e.code)
             # текст от провайдера нужен, чтобы понять причину:
             # ключей в нём не бывает, только описание отказа
+            # при блокировке тело пустое, зато заголовки выдают,
+            # кто именно отказал — сервис или защита перед ним
+            hdr = {}
+            try:
+                for h in ("server", "cf-ray", "cf-mitigated",
+                          "content-type"):
+                    v = e.headers.get(h)
+                    if v:
+                        hdr[h] = v[:60]
+            except Exception:
+                pass
             return self._send(502, {
                 "error": code or ("ошибка %s" % e.code),
                 "http": e.code, "provider": provider,
-                "detail": (msg or "")[:300]})
+                "detail": (msg or "")[:300], "headers": hdr})
         except Exception as e:
             return self._send(502, {"error": "не дозвонился до модели: %s"
                                              % e})
