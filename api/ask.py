@@ -266,11 +266,17 @@ def _prompt(question, context, catalog):
     return "\n\n=====\n\n".join(parts)
 
 
-def ask_model(question, context, catalog, provider=None, key=None):
+def ask_model(question, context, catalog, provider=None, key=None,
+              want_model=""):
     """Пробуем модели по очереди: перегружена одна — берём следующую."""
     provider = provider or PROVIDER
     key = key or key_for(provider)
-    models = [MODEL] if MODEL else models_for(provider, key)
+    if want_model:
+        models = [want_model]
+    elif MODEL:
+        models = [MODEL]
+    else:
+        models = models_for(provider, key)
     last = None
     for model in models or [DEFAULTS.get(provider, "")]:
         try:
@@ -447,6 +453,8 @@ class handler(BaseHTTPRequestHandler):
         # сеть выбирает пользователь в программе; чужое значение не берём
         want = (payload.get("provider") or "").strip().lower()
         provider = want if want in KNOWN else PROVIDER
+        # программа может попросить конкретную модель у этой сети
+        want_model = (payload.get("model") or "").strip()
         key = key_for(provider)
         if not key:
             return self._send(500, {
@@ -455,7 +463,8 @@ class handler(BaseHTTPRequestHandler):
 
         try:
             answer = ask_model(question, payload.get("context") or "",
-                               payload.get("catalog") or "", provider, key)
+                               payload.get("catalog") or "", provider, key,
+                               want_model)
         except urllib.error.HTTPError as e:
             try:
                 msg = json.loads(e.read().decode("utf-8"))
