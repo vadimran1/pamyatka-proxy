@@ -9,7 +9,14 @@ ai.py, потом пересоберите.
 import os, json, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler
 
-PROVIDER = os.environ.get("PAMYATKA_KEY_GEMINI", "gemini").strip().lower()
+KNOWN = ("gemini", "deepseek")
+
+# В переменную легко вписать не то. Неизвестное значение молча
+# заменяем на gemini и НЕ показываем наружу: если туда случайно
+# попал ключ, он не должен утечь через открытую проверку /ask.
+_raw = os.environ.get("PAMYATKA_PROVIDER", "").strip().lower()
+PROVIDER = _raw if _raw in KNOWN else "gemini"
+PROVIDER_OK = (not _raw) or (_raw in KNOWN)
 
 # Ключи можно держать оба сразу — берётся тот, что подходит выбранной
 # сети. Так переключение это одна строчка PAMYATKA_PROVIDER, а не
@@ -159,9 +166,12 @@ class handler(BaseHTTPRequestHandler):
                 if os.environ.get("PAMYATKA_KEY_" + n.upper(), "").strip()]
         if os.environ.get("PAMYATKA_KEY", "").strip():
             have.append("общий")
-        self._send(200, {"ok": True, "provider": PROVIDER,
-                         "key": bool(KEY), "keys": have,
-                         "model": MODEL or DEFAULTS.get(PROVIDER, "")})
+        out = {"ok": True, "provider": PROVIDER, "key": bool(KEY),
+               "keys": have, "model": MODEL or DEFAULTS.get(PROVIDER, "")}
+        if not PROVIDER_OK:
+            out["warning"] = ("в PAMYATKA_PROVIDER не gemini и не "
+                              "deepseek — значение проигнорировано")
+        self._send(200, out)
 
     def do_POST(self):
         if not KEY:

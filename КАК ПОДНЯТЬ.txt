@@ -32,6 +32,8 @@
 В проекте: Settings -> Environment Variables. Добавить:
 
     PAMYATKA_PROVIDER   gemini        какая сеть отвечает сейчас
+                                      (можно вообще не задавать —
+                                       тогда работает gemini)
     PAMYATKA_KEY_GEMINI     ключ от Gemini
     PAMYATKA_KEY_DEEPSEEK   ключ от DeepSeek
 
