@@ -363,7 +363,47 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    PROBE = {"orcarouter": ORCA_BASE + "/v1/models",
+             "odirouter": ODIROUTER_BASE + "/v1/models",
+             "deepseek": "https://api.deepseek.com/models",
+             "gemini": "https://generativelanguage.googleapis.com"
+                       "/v1beta/models"}
+
     def do_GET(self):
+        # ?probe=сеть — дозванивается ли сервер до провайдера вообще.
+        # Адреса фиксированы списком, ключи не участвуют.
+        q = (self.path.split("?", 1) + [""])[1]
+        want = ""
+        for part in q.split("&"):
+            if part.startswith("probe="):
+                want = part[6:].strip().lower()
+        if want:
+            url = self.PROBE.get(want)
+            if not url:
+                return self._send(400, {"error": "неизвестная сеть"})
+            try:
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "PamyatkaProxy"})
+                with urllib.request.urlopen(req, timeout=25) as r:
+                    return self._send(200, {
+                        "probe": want, "http": r.status, "reachable": True,
+                        "server": r.headers.get("server", ""),
+                        "body": r.read(160).decode("utf-8", "replace")})
+            except urllib.error.HTTPError as e:
+                body = ""
+                try:
+                    body = e.read(200).decode("utf-8", "replace")
+                except Exception:
+                    pass
+                # свой JSON с ошибкой = сервис ответил; пусто = заслон
+                return self._send(200, {
+                    "probe": want, "http": e.code,
+                    "reachable": bool(body.strip()),
+                    "server": e.headers.get("server", ""), "body": body})
+            except Exception as e:
+                return self._send(200, {"probe": want, "reachable": False,
+                                        "error": str(e)[:150]})
+
         have = [n for n in KNOWN if key_for(n)]
         out = {"ok": True, "provider": PROVIDER, "key": bool(KEY),
                "keys": have,
