@@ -9,7 +9,7 @@ ai.py, потом пересоберите.
 import os, re, json, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler
 
-KNOWN = ("gemini", "deepseek", "odirouter")
+KNOWN = ("gemini", "deepseek", "odirouter", "orcarouter")
 
 # В переменную легко вписать не то. Неизвестное значение молча
 # заменяем на gemini и НЕ показываем наружу: если туда случайно
@@ -30,7 +30,12 @@ KEY_NAMES = {
                  "PAMYATKA_DS", "DEEPSEEK_API_KEY", "PAMYATKA_KEY"),
     "odirouter": ("PAMYATKA_KEY_ODIROUTER", "PAMYATKA_ODIROUTER_KEY",
                   "PAMYATKA_OR", "ODIROUTER_API_KEY", "PAMYATKA_KEY"),
+    "orcarouter": ("PAMYATKA_KEY_ORCAROUTER", "PAMYATKA_ORCAROUTER_KEY",
+                   "PAMYATKA_ORCA", "ORCAROUTER_API_KEY", "PAMYATKA_KEY"),
 }
+
+ORCA_BASE = os.environ.get("PAMYATKA_ORCA_BASE",
+                           "https://api.orcarouter.ai").rstrip("/")
 
 ODIROUTER_BASE = os.environ.get("PAMYATKA_ODIROUTER_BASE",
                                 "https://api.odirouter.ai").rstrip("/")
@@ -88,7 +93,19 @@ def models_for(provider, key):
         return _models_cache[provider]
     out = []
     try:
-        if provider == "odirouter":
+        if provider == "orcarouter":
+            req = urllib.request.Request(
+                ORCA_BASE + "/v1/models",
+                headers={"Authorization": "Bearer " + key} if key else {})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                ids = [m.get("id", "") for m in
+                       json.loads(r.read().decode()).get("data", [])
+                       if isinstance(m.get("id"), str)]
+            free = [i for i in ids if "free" in i.lower()]
+            # собственная бесплатная модель сервиса — первой
+            free.sort(key=lambda i: (not i.startswith("orcarouter/"), i))
+            out = free or ids
+        elif provider == "odirouter":
             req = urllib.request.Request(
                 ODIROUTER_BASE + "/v1/models",
                 headers={"Authorization": "Bearer " + key})
@@ -136,7 +153,10 @@ def models_for(provider, key):
 FALLBACK = {"gemini": ["gemini-2.5-flash", "gemini-2.0-flash",
                        "gemini-flash-latest"],
             "deepseek": ["deepseek-chat"],
-            "odirouter": ["grok-4.5"]}
+            "odirouter": ["grok-4.5"],
+            "orcarouter": ["orcarouter/free",
+                           "deepseek/deepseek-v4-flash-free",
+                           "z-ai/glm-5.3-flash-free"]}
 
 
 KEY = key_for(PROVIDER)
@@ -290,6 +310,15 @@ def _text_from_responses(data):
 
 def _one(question, context, catalog, provider, key, model):
     prompt = _prompt(question, context, catalog)
+    if provider == "orcarouter":
+        data = _post(ORCA_BASE + "/v1/chat/completions",
+                     {"model": model,
+                      "messages": [{"role": "system", "content": SYSTEM},
+                                   {"role": "user", "content": prompt}],
+                      "temperature": 0.2, "max_tokens": 700,
+                      "stream": False},
+                     {"Authorization": "Bearer " + key})
+        return _text_from_responses(data).strip()
     if provider == "odirouter":
         # шлюз One API: работает в формате chat/completions,
         # эндпоинта /v1/responses у него нет
