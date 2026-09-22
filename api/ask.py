@@ -9,8 +9,13 @@ ai.py, потом пересоберите.
 import os, json, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler
 
-KEY = os.environ.get("PAMYATKA_KEY", "").strip()
-PROVIDER = os.environ.get("PAMYATKA_PROVIDER", "gemini").strip()
+PROVIDER = os.environ.get("PAMYATKA_PROVIDER", "gemini").strip().lower()
+
+# Ключи можно держать оба сразу — берётся тот, что подходит выбранной
+# сети. Так переключение это одна строчка PAMYATKA_PROVIDER, а не
+# перевставка ключа (и не ошибка «ключ от другой сети»).
+KEY = (os.environ.get("PAMYATKA_KEY_" + PROVIDER.upper(), "").strip()
+       or os.environ.get("PAMYATKA_KEY", "").strip())
 MODEL = os.environ.get("PAMYATKA_MODEL", "").strip()
 SECRET = os.environ.get("PAMYATKA_SECRET", "").strip()
 RATE_N = int(os.environ.get("PAMYATKA_RATE", "20") or 20)
@@ -150,8 +155,13 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        have = [n for n in ("gemini", "deepseek")
+                if os.environ.get("PAMYATKA_KEY_" + n.upper(), "").strip()]
+        if os.environ.get("PAMYATKA_KEY", "").strip():
+            have.append("общий")
         self._send(200, {"ok": True, "provider": PROVIDER,
-                         "key": bool(KEY)})
+                         "key": bool(KEY), "keys": have,
+                         "model": MODEL or DEFAULTS.get(PROVIDER, "")})
 
     def do_POST(self):
         if not KEY:

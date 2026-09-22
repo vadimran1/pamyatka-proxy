@@ -31,8 +31,15 @@
 --------------------
 В проекте: Settings -> Environment Variables. Добавить:
 
-    PAMYATKA_KEY        ваш ключ
-    PAMYATKA_PROVIDER   gemini   (или deepseek)
+    PAMYATKA_PROVIDER   gemini        какая сеть отвечает сейчас
+    PAMYATKA_KEY_GEMINI     ключ от Gemini
+    PAMYATKA_KEY_DEEPSEEK   ключ от DeepSeek
+
+Можно задать оба ключа сразу — прокладка возьмёт тот, что подходит
+выбранной сети. Переключение между ними = поменять одну строчку
+PAMYATKA_PROVIDER на gemini или deepseek и нажать Redeploy.
+
+Если сеть одна, можно обойтись общим именем PAMYATKA_KEY.
 
 Необязательно:
     PAMYATKA_MODEL      имя модели, если не устраивает обычная
@@ -50,6 +57,7 @@
 Должно ответить примерно так:
     {"ok": true, "provider": "gemini", "key": true}
 
+Поле "keys" покажет, какие ключи видит сервер, например ["gemini"].
 Если "key": false — переменная не подхватилась, сделайте Redeploy.
 
 
