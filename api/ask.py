@@ -291,10 +291,14 @@ def _text_from_responses(data):
 def _one(question, context, catalog, provider, key, model):
     prompt = _prompt(question, context, catalog)
     if provider == "odirouter":
-        data = _post(ODIROUTER_BASE + "/v1/responses",
-                     {"model": model, "instructions": SYSTEM,
-                      "input": prompt, "stream": False,
-                      "max_output_tokens": 700},
+        # шлюз One API: работает в формате chat/completions,
+        # эндпоинта /v1/responses у него нет
+        data = _post(ODIROUTER_BASE + "/v1/chat/completions",
+                     {"model": model,
+                      "messages": [{"role": "system", "content": SYSTEM},
+                                   {"role": "user", "content": prompt}],
+                      "temperature": 0.2, "max_tokens": 700,
+                      "stream": False},
                      {"Authorization": "Bearer " + key})
         return _text_from_responses(data).strip()
     if provider == "deepseek":
