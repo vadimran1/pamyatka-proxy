@@ -9,7 +9,7 @@ ai.py, потом пересоберите.
 import os, re, json, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler
 
-KNOWN = ("gemini", "deepseek")
+KNOWN = ("gemini", "deepseek", "odirouter")
 
 # В переменную легко вписать не то. Неизвестное значение молча
 # заменяем на gemini и НЕ показываем наружу: если туда случайно
@@ -28,7 +28,12 @@ KEY_NAMES = {
                "PAMYATKA_GM", "GEMINI_API_KEY", "PAMYATKA_KEY"),
     "deepseek": ("PAMYATKA_KEY_DEEPSEEK", "PAMYATKA_DEEPSEEK_KEY",
                  "PAMYATKA_DS", "DEEPSEEK_API_KEY", "PAMYATKA_KEY"),
+    "odirouter": ("PAMYATKA_KEY_ODIROUTER", "PAMYATKA_ODIROUTER_KEY",
+                  "PAMYATKA_OR", "ODIROUTER_API_KEY", "PAMYATKA_KEY"),
 }
+
+ODIROUTER_BASE = os.environ.get("PAMYATKA_ODIROUTER_BASE",
+                                "https://api.odirouter.ai").rstrip("/")
 
 
 def key_for(provider):
@@ -83,7 +88,17 @@ def models_for(provider, key):
         return _models_cache[provider]
     out = []
     try:
-        if provider == "deepseek":
+        if provider == "odirouter":
+            req = urllib.request.Request(
+                ODIROUTER_BASE + "/v1/models",
+                headers={"Authorization": "Bearer " + key})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                ids = [m.get("id", "") for m in
+                       json.loads(r.read().decode()).get("data", [])]
+            # сперва то, что просили, потом всё остальное
+            pref = [i for i in ids if "grok" in i.lower()]
+            out = pref + [i for i in ids if i not in pref]
+        elif provider == "deepseek":
             req = urllib.request.Request(
                 "https://api.deepseek.com/models",
                 headers={"Authorization": "Bearer " + key})
@@ -120,7 +135,8 @@ def models_for(provider, key):
 
 FALLBACK = {"gemini": ["gemini-2.5-flash", "gemini-2.0-flash",
                        "gemini-flash-latest"],
-            "deepseek": ["deepseek-chat"]}
+            "deepseek": ["deepseek-chat"],
+            "odirouter": ["grok-4.5"]}
 
 
 KEY = key_for(PROVIDER)
@@ -246,8 +262,41 @@ def ask_model(question, context, catalog, provider=None, key=None):
     raise RuntimeError("нет доступных моделей")
 
 
+def _text_from_responses(data):
+    """Ответ Responses API: пробуем все известные укладки."""
+    t = data.get("output_text")
+    if isinstance(t, str) and t.strip():
+        return t
+    if isinstance(t, list) and t:
+        return "".join(x for x in t if isinstance(x, str))
+    chunks = []
+    for item in (data.get("output") or []):
+        if not isinstance(item, dict):
+            continue
+        for c in (item.get("content") or []):
+            if isinstance(c, dict):
+                v = c.get("text") or c.get("output_text") or ""
+                if isinstance(v, dict):
+                    v = v.get("value", "")
+                if v:
+                    chunks.append(v)
+    if chunks:
+        return "".join(chunks)
+    # на случай, если сервис отвечает в стиле chat/completions
+    ch = (data.get("choices") or [{}])[0]
+    return ((ch.get("message") or {}).get("content")
+            or ch.get("text") or "")
+
+
 def _one(question, context, catalog, provider, key, model):
     prompt = _prompt(question, context, catalog)
+    if provider == "odirouter":
+        data = _post(ODIROUTER_BASE + "/v1/responses",
+                     {"model": model, "instructions": SYSTEM,
+                      "input": prompt, "stream": False,
+                      "max_output_tokens": 700},
+                     {"Authorization": "Bearer " + key})
+        return _text_from_responses(data).strip()
     if provider == "deepseek":
         data = _post("https://api.deepseek.com/chat/completions",
                      {"model": model,
