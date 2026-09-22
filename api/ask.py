@@ -243,7 +243,11 @@ def _allowed(ip):
 
 def _post(url, payload, headers):
     data = json.dumps(payload).encode("utf-8")
-    hdr = {"Content-Type": "application/json"}
+    # без своего User-Agent уходит «Python-urllib», а его Cloudflare
+    # у некоторых шлюзов режет молча: пустой 403 вместо ответа
+    hdr = {"Content-Type": "application/json",
+           "User-Agent": "PamyatkaProxy/1.0",
+           "Accept": "application/json"}
     hdr.update(headers)
     req = urllib.request.Request(url, data=data, method="POST", headers=hdr)
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
