@@ -225,8 +225,12 @@ class handler(BaseHTTPRequestHandler):
                 msg = ""
             code = {401: "ключ не принят", 402: "кончились деньги на счёте",
                     429: "лимит запросов исчерпан"}.get(e.code)
-            return self._send(502, {"error": code or
-                                    ("ошибка %s: %s" % (e.code, msg[:120]))})
+            # текст от провайдера нужен, чтобы понять причину:
+            # ключей в нём не бывает, только описание отказа
+            return self._send(502, {
+                "error": code or ("ошибка %s" % e.code),
+                "http": e.code, "provider": provider,
+                "detail": (msg or "")[:300]})
         except Exception as e:
             return self._send(502, {"error": "не дозвонился до модели: %s"
                                              % e})
