@@ -6,7 +6,7 @@ ai.py, потом пересоберите.
 
 Ключ лежит в переменных окружения Vercel, в программе его нет.
 """
-import os, json, time, urllib.request, urllib.error
+import os, re, json, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler
 
 KNOWN = ("gemini", "deepseek")
@@ -21,10 +21,106 @@ PROVIDER_OK = (not _raw) or (_raw in KNOWN)
 # Ключи можно держать оба сразу — берётся тот, что подходит выбранной
 # сети. Так переключение это одна строчка PAMYATKA_PROVIDER, а не
 # перевставка ключа (и не ошибка «ключ от другой сети»).
+# Несколько допустимых имён: если переменную не дают пересоздать,
+# просто добавьте ключ под другим именем из этого списка.
+KEY_NAMES = {
+    "gemini": ("PAMYATKA_KEY_GEMINI", "PAMYATKA_GEMINI_KEY",
+               "PAMYATKA_GM", "GEMINI_API_KEY", "PAMYATKA_KEY"),
+    "deepseek": ("PAMYATKA_KEY_DEEPSEEK", "PAMYATKA_DEEPSEEK_KEY",
+                 "PAMYATKA_DS", "DEEPSEEK_API_KEY", "PAMYATKA_KEY"),
+}
+
+
 def key_for(provider):
-    """Ключ под конкретную сеть, иначе общий."""
-    return (os.environ.get("PAMYATKA_KEY_" + provider.upper(), "").strip()
-            or os.environ.get("PAMYATKA_KEY", "").strip())
+    """Первое непустое из допустимых имён. Позже в списке — запасные."""
+    for name in KEY_NAMES.get(provider, ()):
+        v = os.environ.get(name, "").strip()
+        if v:
+            return v
+    return ""
+
+
+def key_source(provider):
+    """Из какой переменной взят ключ — для проверки /ask."""
+    for name in KEY_NAMES.get(provider, ()):
+        if os.environ.get(name, "").strip():
+            return name
+    return ""
+
+
+def _ver(model_id):
+    """Номер версии из имени вида gemini-2.5-flash."""
+    m = re.search(r"([0-9]+)(?:[.]([0-9]+))?", model_id)
+    if not m:
+        return (0, 0)
+    return (int(m.group(1)), int(m.group(2) or 0))
+
+
+def _rank_gemini(model_id):
+    """Чем выше, тем лучше для бесплатного тарифа."""
+    i = model_id.lower()
+    if "embedding" in i or "aqa" in i or "image" in i or "tts" in i:
+        return None                      # не для текстовых ответов
+    if "flash" in i and "lite" not in i:
+        base = 3                         # быстрые и бесплатные
+    elif "flash" in i:
+        base = 2                         # lite — слабее
+    elif "pro" in i:
+        base = 1                         # обычно вне бесплатного тарифа
+    else:
+        return None
+    if "preview" in i or "exp" in i:
+        base -= 0.5                      # нестабильные
+    return (base,) + _ver(i)
+
+
+_models_cache = {}
+
+
+def models_for(provider, key):
+    """Список моделей по убыванию предпочтения."""
+    if provider in _models_cache:
+        return _models_cache[provider]
+    out = []
+    try:
+        if provider == "deepseek":
+            req = urllib.request.Request(
+                "https://api.deepseek.com/models",
+                headers={"Authorization": "Bearer " + key})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                ids = [m.get("id", "") for m in
+                       json.loads(r.read().decode()).get("data", [])]
+            # обычный чат быстрее и дешевле рассуждающего
+            out = ([i for i in ids if i == "deepseek-chat"] +
+                   [i for i in ids if i != "deepseek-chat"])
+        else:
+            req = urllib.request.Request(
+                "https://generativelanguage.googleapis.com/v1beta/models",
+                headers={"x-goog-api-key": key})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = json.loads(r.read().decode())
+            scored = []
+            for m in data.get("models", []):
+                if "generateContent" not in m.get(
+                        "supportedGenerationMethods", []):
+                    continue
+                mid = m.get("name", "").replace("models/", "")
+                rank = _rank_gemini(mid)
+                if rank:
+                    scored.append((rank, mid))
+            scored.sort(reverse=True)
+            out = [mid for _, mid in scored]
+    except Exception:
+        out = []
+    if not out:
+        out = FALLBACK.get(provider, [])
+    _models_cache[provider] = out[:4]
+    return _models_cache[provider]
+
+
+FALLBACK = {"gemini": ["gemini-2.5-flash", "gemini-2.0-flash",
+                       "gemini-flash-latest"],
+            "deepseek": ["deepseek-chat"]}
 
 
 KEY = key_for(PROVIDER)
@@ -131,9 +227,26 @@ def _prompt(question, context, catalog):
 
 
 def ask_model(question, context, catalog, provider=None, key=None):
+    """Пробуем модели по очереди: перегружена одна — берём следующую."""
     provider = provider or PROVIDER
     key = key or key_for(provider)
-    model = MODEL or DEFAULTS.get(provider, "")
+    models = [MODEL] if MODEL else models_for(provider, key)
+    last = None
+    for model in models or [DEFAULTS.get(provider, "")]:
+        try:
+            return _one(question, context, catalog, provider, key, model)
+        except urllib.error.HTTPError as e:
+            # занята или нет такой — пробуем следующую; остальное наверх
+            if e.code in (404, 429, 500, 503):
+                last = e
+                continue
+            raise
+    if last:
+        raise last
+    raise RuntimeError("нет доступных моделей")
+
+
+def _one(question, context, catalog, provider, key, model):
     prompt = _prompt(question, context, catalog)
     if provider == "deepseek":
         data = _post("https://api.deepseek.com/chat/completions",
@@ -169,12 +282,13 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        have = [n for n in ("gemini", "deepseek")
-                if os.environ.get("PAMYATKA_KEY_" + n.upper(), "").strip()]
-        if os.environ.get("PAMYATKA_KEY", "").strip():
-            have.append("общий")
+        have = [n for n in KNOWN if key_for(n)]
         out = {"ok": True, "provider": PROVIDER, "key": bool(KEY),
-               "keys": have, "model": MODEL or DEFAULTS.get(PROVIDER, "")}
+               "keys": have,
+               "key_from": {n: key_source(n) for n in KNOWN
+                            if key_for(n)},
+               "model": MODEL or (models_for(PROVIDER, KEY)[:1] or [""])[0],
+               "models": models_for(PROVIDER, KEY) if KEY else []}
         if not PROVIDER_OK:
             out["warning"] = ("в PAMYATKA_PROVIDER не gemini и не "
                               "deepseek — значение проигнорировано")
