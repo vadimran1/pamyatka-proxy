@@ -461,10 +461,35 @@ class handler(BaseHTTPRequestHandler):
                 "error": "на сервере нет ключа для сети %s — добавьте "
                          "PAMYATKA_KEY_%s" % (provider, provider.upper())})
 
+        # порядок обхода: сначала выбранная сеть, затем запасные
+        order = [provider] + [n for n in KNOWN
+                              if n != provider and key_for(n)]
+        answer, used, last = "", provider, None
+        for n, prov in enumerate(order):
+            try:
+                answer = ask_model(question, payload.get("context") or "",
+                                   payload.get("catalog") or "", prov,
+                                   key_for(prov),
+                                   want_model if prov == provider else "")
+                used = prov
+                last = None
+                break
+            except urllib.error.HTTPError as e:
+                last = e
+                # 503/429/500 — сеть занята, имеет смысл попробовать другую;
+                # 401/402 — ключ или деньги, перебор ничего не даст
+                if e.code not in (429, 500, 502, 503) or n == len(order) - 1:
+                    break
+            except Exception as e:
+                last = e
+                if n == len(order) - 1:
+                    break
+        if last is not None:
+            raise last
+        provider = used
+
         try:
-            answer = ask_model(question, payload.get("context") or "",
-                               payload.get("catalog") or "", provider, key,
-                               want_model)
+            pass
         except urllib.error.HTTPError as e:
             try:
                 msg = json.loads(e.read().decode("utf-8"))
