@@ -9,7 +9,7 @@ ai.py, потом пересоберите.
 import os, json, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler
 
-PROVIDER = os.environ.get("AQ.Ab8RN6KU3sBqkbMe_DBjfC7BqM1ejepCIkE7xz3ue9QW5nzCtA", "gemini").strip().lower()
+PROVIDER = os.environ.get("PAMYATKA_KEY_GEMINI", "gemini").strip().lower()
 
 # Ключи можно держать оба сразу — берётся тот, что подходит выбранной
 # сети. Так переключение это одна строчка PAMYATKA_PROVIDER, а не
