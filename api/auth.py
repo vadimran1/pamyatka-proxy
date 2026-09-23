@@ -45,11 +45,37 @@ VIP = {x.strip() for x in os.environ.get("PAMYATKA_VIP_IDS", "").split(",")
 UA = "PamyatkaAuth/1.0 (+https://pamyatka-proxy.vercel.app)"
 ADMINS = {x.strip() for x in
           os.environ.get("PAMYATKA_ADMIN_IDS", "").split(",") if x.strip()}
-# хранилище: Upstash Redis из маркетплейса Vercel кладёт одну из этих пар
-REDIS_URL = (os.environ.get("KV_REST_API_URL") or
-             os.environ.get("UPSTASH_REDIS_REST_URL") or "").rstrip("/")
-REDIS_TOKEN = (os.environ.get("KV_REST_API_TOKEN") or
-               os.environ.get("UPSTASH_REDIS_REST_TOKEN") or "")
+def _find_redis():
+    """Адрес и ключ REST-доступа к Redis.
+
+    При подключении хранилища Vercel разрешает дать переменным свою
+    приставку: вместо KV_REST_API_URL выходит, скажем,
+    STORAGE_KV_REST_API_URL. Поэтому ищем по окончанию имени, а не по
+    точному совпадению. Ключ «только для чтения» не подходит — пропускаем.
+    """
+    env = os.environ
+    for url_end, tok_end in (("KV_REST_API_URL", "KV_REST_API_TOKEN"),
+                             ("REDIS_REST_URL", "REDIS_REST_TOKEN"),
+                             ("REDIS_REST_API_URL", "REDIS_REST_API_TOKEN")):
+        for name in sorted(env):
+            if name.endswith(url_end) and env[name].startswith(("https://", "http://")):
+                pre = name[:-len(url_end)]
+                tok = env.get(pre + tok_end, "")
+                if tok:
+                    return env[name].rstrip("/"), tok
+    return "", ""
+
+
+def storage_names():
+    """Имена (не значения!) переменных, похожих на хранилище, — для
+    подсказки, если подключение не нашлось."""
+    marks = ("KV_", "REDIS", "UPSTASH")
+    return sorted(n for n in os.environ
+                  if any(m in n for m in marks)
+                  and "READ_ONLY" not in n)
+
+
+REDIS_URL, REDIS_TOKEN = _find_redis()
 KEEP = 400 * 24 * 3600                # дневные счётчики живут чуть больше года
 MSK = 3 * 3600                        # сутки считаем по Москве, а не по UTC
 
@@ -278,8 +304,11 @@ class handler(BaseHTTPRequestHandler):
         ready = bool(CLIENT_ID and CLIENT_SECRET)
 
         if step == "status":
-            return self._send(200, {"configured": ready,
-                                    "stats": bool(REDIS_URL and REDIS_TOKEN)})
+            out = {"configured": ready,
+                   "stats": bool(REDIS_URL and REDIS_TOKEN)}
+            if not out["stats"]:
+                out["storage_vars"] = storage_names()
+            return self._send(200, out)
 
         if step == "stats":
             auth = self.headers.get("Authorization", "")
@@ -292,8 +321,14 @@ class handler(BaseHTTPRequestHandler):
                                         % who.get("uid"),
                                         "uid": who.get("uid")})
             if not (REDIS_URL and REDIS_TOKEN):
-                return self._send(503, {"error": "Хранилище не подключено: "
-                                        "Vercel → Storage → Upstash Redis."})
+                seen = storage_names()
+                why = ("Хранилище не подключено: Vercel → Storage → Upstash "
+                       "for Redis, затем Redeploy." if not seen else
+                       "Хранилище видно, но без REST-доступа. Найдены "
+                       "переменные: %s. Нужна пара …KV_REST_API_URL и "
+                       "…KV_REST_API_TOKEN (есть у Upstash for Redis)."
+                       % ", ".join(seen))
+                return self._send(503, {"error": why, "storage_vars": seen})
             try:
                 return self._send(200, report())
             except Exception as e:

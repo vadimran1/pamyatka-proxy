@@ -169,10 +169,19 @@ TIMEOUT = 60
 # FIRST_WAIT секунд, а если молчит — остаток уходит запасной: лучше
 # ответ Grok через 40 секунд, чем ошибка на 60-й.
 TOTAL_WAIT = 52
-_R_URL = (os.environ.get("KV_REST_API_URL") or
-          os.environ.get("UPSTASH_REDIS_REST_URL") or "").rstrip("/")
-_R_TOKEN = (os.environ.get("KV_REST_API_TOKEN") or
-            os.environ.get("UPSTASH_REDIS_REST_TOKEN") or "")
+def _find_redis():
+    for url_end, tok_end in (("KV_REST_API_URL", "KV_REST_API_TOKEN"),
+                             ("REDIS_REST_URL", "REDIS_REST_TOKEN"),
+                             ("REDIS_REST_API_URL", "REDIS_REST_API_TOKEN")):
+        for name in sorted(os.environ):
+            if name.endswith(url_end) and                     os.environ[name].startswith(("https://", "http://")):
+                tok = os.environ.get(name[:-len(url_end)] + tok_end, "")
+                if tok:
+                    return os.environ[name].rstrip("/"), tok
+    return "", ""
+
+
+_R_URL, _R_TOKEN = _find_redis()
 
 
 def _count_question(provider):
