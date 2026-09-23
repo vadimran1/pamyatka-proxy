@@ -37,7 +37,13 @@ CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "").strip()
 BASE = os.environ.get("PAMYATKA_BASE_URL",
                       "https://pamyatka-proxy.vercel.app").rstrip("/")
 REDIRECT = BASE + "/auth"
-TTL = 30 * 24 * 3600                   # пропуск живёт месяц
+TTL = 90 * 24 * 3600                   # пропуск живёт три месяца: вход
+                                       # теперь обязателен, дёргать чаще незачем
+COOKIE = "pm_s"                        # пропуск сайта — в HttpOnly-куке
+DOWNLOAD_URL = os.environ.get(
+    "PAMYATKA_DOWNLOAD_URL",
+    "https://raw.githubusercontent.com/vadimran1/RMRP/main/"
+    "Setup-Pamyatka-RMRP.exe")
 STATE_TTL = 600                        # на сам вход — десять минут
 # пробные «подписчики»: Discord ID через запятую в переменной Vercel
 VIP = {x.strip() for x in os.environ.get("PAMYATKA_VIP_IDS", "").split(",")
@@ -223,7 +229,16 @@ def report():
                            key=lambda x: -x["users"]),
         "questions_today_by_net": {k: int(v) for k, v in qnet.items()},
         **subs_report(),
+        **downloads_report(),
     }
+
+
+def downloads_report():
+    d = day()
+    r = redis(["PFCOUNT", "dl:all"], ["GET", "dl:d:" + d],
+              ["PFCOUNT", "web:all"])
+    return {"downloaders": int(r[0] or 0), "downloads_today": int(r[1] or 0),
+            "site_logins": int(r[2] or 0)}
 
 
 # ------------------------------------------------------------- подписка ---
@@ -447,6 +462,21 @@ def _page(title, text):
     return PAGE.replace("{title}", esc(title)).replace("{text}", esc(text))
 
 
+def _cookie_token(headers):
+    for part in (headers.get("Cookie") or "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == COOKIE:
+            return v
+    return ""
+
+
+def _who(headers):
+    """Кто пришёл: пропуск программы (Bearer) или куки сайта."""
+    auth = headers.get("Authorization", "")
+    tok = auth[7:] if auth.startswith("Bearer ") else _cookie_token(headers)
+    return verify(tok), tok
+
+
 def _port(v):
     try:
         p = int(v)
@@ -578,8 +608,7 @@ class handler(BaseHTTPRequestHandler):
                                         % type(e).__name__})
 
         if step == "me":
-            auth = self.headers.get("Authorization", "")
-            data = verify(auth[7:] if auth.startswith("Bearer ") else "")
+            data, _ = _who(self.headers)
             if not data:
                 return self._send(401, {"error": "пропуск недействителен"})
             # план пересчитываем при каждой проверке: оплатил — подписка
@@ -589,6 +618,25 @@ class handler(BaseHTTPRequestHandler):
             data["plan"] = "vip" if until > time.time() else "free"
             data["price"], data["paywall"] = PRICE, PAYWALL
             return self._send(200, data)
+
+        if step == "download":
+            who, _ = _who(self.headers)
+            if not who:
+                # не вошёл — сначала вход, потом сразу обратно к скачиванию
+                return self._go(BASE + "/auth?step=start&web=1&next=download")
+            try:
+                d = day()
+                redis(["PFADD", "dl:all", who["uid"]], ["INCR", "dl:d:" + d],
+                      ["EXPIRE", "dl:d:" + d, KEEP], ["PFADD", "acc:all", who["uid"]])
+            except Exception:
+                pass                   # счётчик не должен мешать скачиванию
+            return self._go(DOWNLOAD_URL)
+
+        if step == "logout":
+            return self._send(302, b"", "text/plain", {
+                "Location": BASE + "/",
+                "Set-Cookie": COOKIE + "=; Path=/; Max-Age=0; HttpOnly; "
+                                       "Secure; SameSite=Lax"})
 
         if step == "pay":
             uid = g("uid")
@@ -615,6 +663,19 @@ class handler(BaseHTTPRequestHandler):
                               "Автор программы пока не подключил вход "
                               "через Discord. Закройте вкладку.")
 
+        if step == "start" and g("web") == "1":
+            nxt = g("next") if g("next") in ("download", "home") else "home"
+            state = sign({"web": 1, "next": nxt,
+                          "exp": int(time.time()) + STATE_TTL})
+            return self._go("https://discord.com/oauth2/authorize?" +
+                            urllib.parse.urlencode({
+                                "client_id": CLIENT_ID,
+                                "response_type": "code",
+                                "redirect_uri": REDIRECT,
+                                "scope": "identify",
+                                "prompt": "none",
+                                "state": state}))
+
         if step == "start":
             port, nonce = _port(g("port")), g("nonce")[:64]
             if not port or len(nonce) < 12:
@@ -633,6 +694,24 @@ class handler(BaseHTTPRequestHandler):
 
         # возврат от Discord
         st = verify(g("state"))
+        if st and st.get("web") == 1:
+            if g("error") or not g("code"):
+                return self._go(BASE + "/?login=cancel")
+            try:
+                prof = profile_from_code(g("code"))
+            except Exception:
+                return self._go(BASE + "/?login=fail")
+            try:
+                redis(["PFADD", "acc:all", prof["uid"]],
+                      ["PFADD", "web:all", prof["uid"]])
+            except Exception:
+                pass
+            to = (BASE + "/auth?step=download" if st.get("next") == "download"
+                  else BASE + "/?login=ok")
+            return self._send(302, b"", "text/plain", {
+                "Location": to,
+                "Set-Cookie": "%s=%s; Path=/; Max-Age=%d; HttpOnly; Secure; "
+                              "SameSite=Lax" % (COOKIE, sign(prof), TTL)})
         if not st or not _port(st.get("port")):
             return self._html(400, "Вход устарел",
                               "Начните вход заново из программы.")
