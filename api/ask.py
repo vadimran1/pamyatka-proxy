@@ -165,6 +165,13 @@ SECRET = os.environ.get("PAMYATKA_SECRET", "").strip()
 RATE_N = int(os.environ.get("PAMYATKA_RATE", "20") or 20)
 RATE_WINDOW = 600
 TIMEOUT = 60
+# Vercel обрывает функцию примерно через минуту. Выбранной сети даём
+# FIRST_WAIT секунд, а если молчит — остаток уходит запасной: лучше
+# ответ Grok через 40 секунд, чем ошибка на 60-й.
+TOTAL_WAIT = 52
+FIRST_WAIT = 25
+import threading as _th
+_deadline = _th.local()
 MAX_BODY = 2 * 1024 * 1024
 
 DEFAULTS = {"gemini": "gemini-3.5-flash", "deepseek": "deepseek-chat"}
@@ -250,7 +257,9 @@ def _post(url, payload, headers):
            "Accept": "application/json"}
     hdr.update(headers)
     req = urllib.request.Request(url, data=data, method="POST", headers=hdr)
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+    left = getattr(_deadline, "at", 0) - time.time()
+    wait = TIMEOUT if not getattr(_deadline, "at", 0) else max(3, left)
+    with urllib.request.urlopen(req, timeout=wait) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
@@ -484,7 +493,13 @@ class handler(BaseHTTPRequestHandler):
         order = [provider] + [n for n in KNOWN
                               if n != provider and key_for(n)]
         answer, used, last = "", provider, None
+        started = time.time()
         for n, prov in enumerate(order):
+            # первой сети — свой срок, запасным — всё, что осталось
+            _deadline.at = started + (FIRST_WAIT if n == 0 and
+                                      len(order) > 1 else TOTAL_WAIT)
+            if time.time() > started + TOTAL_WAIT - 3:
+                break
             try:
                 answer = ask_model(question, payload.get("context") or "",
                                    payload.get("catalog") or "", prov,
