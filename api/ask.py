@@ -181,12 +181,91 @@ def _find_redis():
     return "", ""
 
 
+class RedisError(Exception):
+    pass
+
+
+CRLF = bytes([13, 10])
+
+
+def _resp_pack(cmd):
+    """Команда в протоколе Redis: массив строк с длинами."""
+    out = [b"*" + str(len(cmd)).encode() + CRLF]
+    for a in cmd:
+        b = a if isinstance(a, bytes) else str(a).encode("utf-8")
+        out.append(b"$" + str(len(b)).encode() + CRLF + b + CRLF)
+    return b"".join(out)
+
+
+def _resp_read(f):
+    line = f.readline()
+    if not line:
+        raise ConnectionError("Redis закрыл соединение")
+    kind, rest = line[:1], line[1:].rstrip(CRLF)
+    if kind == b"+":
+        return rest.decode("utf-8", "replace")
+    if kind == b"-":
+        return RedisError(rest.decode("utf-8", "replace"))
+    if kind == b":":
+        return int(rest)
+    if kind == b"$":
+        n = int(rest)
+        if n < 0:
+            return None
+        return f.read(n + 2)[:n].decode("utf-8", "replace")
+    if kind == b"*":
+        n = int(rest)
+        if n < 0:
+            return None
+        return [_resp_read(f) for _ in range(n)]
+    raise ConnectionError("непонятный ответ Redis")
+
+
+def _resp_pipeline(url, cmds):
+    """Несколько команд одним заходом по обычному подключению Redis."""
+    import socket, ssl
+    u = urllib.parse.urlparse(url)
+    host, port = u.hostname, u.port or 6379
+    raw = socket.create_connection((host, port), timeout=6)
+    sock = (ssl.create_default_context().wrap_socket(
+        raw, server_hostname=host) if u.scheme == "rediss" else raw)
+    pre = []
+    if u.password:
+        pw = urllib.parse.unquote(u.password)
+        user = urllib.parse.unquote(u.username or "")
+        pre.append(["AUTH", user, pw] if user else ["AUTH", pw])
+    db = (u.path or "").strip("/")
+    if db.isdigit() and db != "0":
+        pre.append(["SELECT", db])
+    try:
+        sock.sendall(b"".join(_resp_pack(c) for c in pre + list(cmds)))
+        f = sock.makefile("rb")
+        res = [_resp_read(f) for _ in range(len(pre) + len(cmds))]
+    finally:
+        sock.close()
+    for r in res[:len(pre)]:
+        if isinstance(r, RedisError):
+            raise r                    # не пустили — дальше смысла нет
+    return [None if isinstance(r, RedisError) else r
+            for r in res[len(pre):]]
+
+
+def _find_tcp():
+    """Адрес обычного подключения: …REDIS_URL или …KV_URL с redis://."""
+    for name in sorted(os.environ):
+        v = os.environ[name]
+        if (name.endswith("REDIS_URL") or name.endswith("KV_URL")) and                 v.startswith(("redis://", "rediss://")):
+            return v
+    return ""
+
+
 _R_URL, _R_TOKEN = _find_redis()
+_R_TCP = "" if (_R_URL and _R_TOKEN) else _find_tcp()
 
 
 def _count_question(provider):
     """Вопрос в статистику автора. Нет хранилища — молча пропускаем."""
-    if not (_R_URL and _R_TOKEN):
+    if not ((_R_URL and _R_TOKEN) or _R_TCP):
         return
     d = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 3 * 3600))
     keep = 400 * 24 * 3600
@@ -194,6 +273,9 @@ def _count_question(provider):
             ["HINCRBY", "qnet:d:" + d, provider, 1],
             ["EXPIRE", "qnet:d:" + d, keep]]
     try:
+        if not (_R_URL and _R_TOKEN):
+            _resp_pipeline(_R_TCP, cmds)
+            return
         req = urllib.request.Request(
             _R_URL + "/pipeline", data=json.dumps(cmds).encode("utf-8"),
             method="POST", headers={"Authorization": "Bearer " + _R_TOKEN,

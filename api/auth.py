@@ -75,7 +75,89 @@ def storage_names():
                   and "READ_ONLY" not in n)
 
 
+class RedisError(Exception):
+    pass
+
+
+CRLF = bytes([13, 10])
+
+
+def _resp_pack(cmd):
+    """Команда в протоколе Redis: массив строк с длинами."""
+    out = [b"*" + str(len(cmd)).encode() + CRLF]
+    for a in cmd:
+        b = a if isinstance(a, bytes) else str(a).encode("utf-8")
+        out.append(b"$" + str(len(b)).encode() + CRLF + b + CRLF)
+    return b"".join(out)
+
+
+def _resp_read(f):
+    line = f.readline()
+    if not line:
+        raise ConnectionError("Redis закрыл соединение")
+    kind, rest = line[:1], line[1:].rstrip(CRLF)
+    if kind == b"+":
+        return rest.decode("utf-8", "replace")
+    if kind == b"-":
+        return RedisError(rest.decode("utf-8", "replace"))
+    if kind == b":":
+        return int(rest)
+    if kind == b"$":
+        n = int(rest)
+        if n < 0:
+            return None
+        return f.read(n + 2)[:n].decode("utf-8", "replace")
+    if kind == b"*":
+        n = int(rest)
+        if n < 0:
+            return None
+        return [_resp_read(f) for _ in range(n)]
+    raise ConnectionError("непонятный ответ Redis")
+
+
+def _resp_pipeline(url, cmds):
+    """Несколько команд одним заходом по обычному подключению Redis."""
+    import socket, ssl
+    u = urllib.parse.urlparse(url)
+    host, port = u.hostname, u.port or 6379
+    raw = socket.create_connection((host, port), timeout=6)
+    sock = (ssl.create_default_context().wrap_socket(
+        raw, server_hostname=host) if u.scheme == "rediss" else raw)
+    pre = []
+    if u.password:
+        pw = urllib.parse.unquote(u.password)
+        user = urllib.parse.unquote(u.username or "")
+        pre.append(["AUTH", user, pw] if user else ["AUTH", pw])
+    db = (u.path or "").strip("/")
+    if db.isdigit() and db != "0":
+        pre.append(["SELECT", db])
+    try:
+        sock.sendall(b"".join(_resp_pack(c) for c in pre + list(cmds)))
+        f = sock.makefile("rb")
+        res = [_resp_read(f) for _ in range(len(pre) + len(cmds))]
+    finally:
+        sock.close()
+    for r in res[:len(pre)]:
+        if isinstance(r, RedisError):
+            raise r                    # не пустили — дальше смысла нет
+    return [None if isinstance(r, RedisError) else r
+            for r in res[len(pre):]]
+
+
+def _find_tcp():
+    """Адрес обычного подключения: …REDIS_URL или …KV_URL с redis://."""
+    for name in sorted(os.environ):
+        v = os.environ[name]
+        if (name.endswith("REDIS_URL") or name.endswith("KV_URL")) and \
+                v.startswith(("redis://", "rediss://")):
+            return v
+    return ""
+
+
 REDIS_URL, REDIS_TOKEN = _find_redis()
+# веб-доступа нет — пробуем обычное подключение (так даёт хранилище «Redis»)
+REDIS_TCP = "" if (REDIS_URL and REDIS_TOKEN) else _find_tcp()
+STORE = bool((REDIS_URL and REDIS_TOKEN) or REDIS_TCP)
 KEEP = 400 * 24 * 3600                # дневные счётчики живут чуть больше года
 MSK = 3 * 3600                        # сутки считаем по Москве, а не по UTC
 
@@ -84,7 +166,7 @@ MSK = 3 * 3600                        # сутки считаем по Моск�
 def redis(*cmds):
     """Несколько команд Redis одним запросом. Без хранилища — None."""
     if not (REDIS_URL and REDIS_TOKEN):
-        return None
+        return _resp_pipeline(REDIS_TCP, cmds) if REDIS_TCP else None
     req = urllib.request.Request(
         REDIS_URL + "/pipeline", data=json.dumps(list(cmds)).encode("utf-8"),
         method="POST", headers={"Authorization": "Bearer " + REDIS_TOKEN,
@@ -304,8 +386,7 @@ class handler(BaseHTTPRequestHandler):
         ready = bool(CLIENT_ID and CLIENT_SECRET)
 
         if step == "status":
-            out = {"configured": ready,
-                   "stats": bool(REDIS_URL and REDIS_TOKEN)}
+            out = {"configured": ready, "stats": STORE}
             if not out["stats"]:
                 out["storage_vars"] = storage_names()
             return self._send(200, out)
@@ -320,7 +401,7 @@ class handler(BaseHTTPRequestHandler):
                                         "автор. Ваш Discord ID: %s"
                                         % who.get("uid"),
                                         "uid": who.get("uid")})
-            if not (REDIS_URL and REDIS_TOKEN):
+            if not STORE:
                 seen = storage_names()
                 why = ("Хранилище не подключено: Vercel → Storage → Upstash "
                        "for Redis, затем Redeploy." if not seen else
