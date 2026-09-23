@@ -350,18 +350,37 @@ def _one(question, context, catalog, provider, key, model):
                      {"Authorization": "Bearer " + key})
         ch = (data.get("choices") or [{}])[0]
         return ((ch.get("message") or {}).get("content") or "").strip()
-    data = _post(
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        "%s:generateContent" % model,
-        {"systemInstruction": {"parts": [{"text": SYSTEM}]},
-         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 700}},
-        {"x-goog-api-key": key})
+    # Новые Gemini сначала «думают», и размышления списываются с того же
+    # лимита, что и ответ: при 700 токенах на сам ответ не оставалось
+    # места, и он обрывался на полуслове. Даём запас и просим думать
+    # поменьше — ответ целый и приходит быстрее.
+    gen = {"temperature": 0.2, "maxOutputTokens": 4096}
+    if "gemini-3" in model:
+        gen["thinkingConfig"] = {"thinkingLevel": "low"}
+    elif "2.5-flash" in model:
+        gen["thinkingConfig"] = {"thinkingBudget": 0}
+    body = {"systemInstruction": {"parts": [{"text": SYSTEM}]},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": gen}
+    url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+           "%s:generateContent" % model)
+    try:
+        data = _post(url, body, {"x-goog-api-key": key})
+    except urllib.error.HTTPError as e:
+        # модель не знает настройки размышлений — спрашиваем без неё
+        if e.code != 400 or "thinkingConfig" not in gen:
+            raise
+        gen.pop("thinkingConfig")
+        data = _post(url, body, {"x-goog-api-key": key})
     cands = data.get("candidates") or []
     if not cands:
         return ""
     parts = (cands[0].get("content") or {}).get("parts") or []
-    return "".join(p.get("text", "") for p in parts).strip()
+    text = "".join(p.get("text", "") for p in parts
+                   if not p.get("thought")).strip()
+    if cands[0].get("finishReason") == "MAX_TOKENS" and text:
+        text += " …"                   # честно показываем, что ответ обрезан
+    return text
 
 
 class handler(BaseHTTPRequestHandler):
