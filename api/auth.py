@@ -619,6 +619,29 @@ class handler(BaseHTTPRequestHandler):
             data["price"], data["paywall"] = PRICE, PAYWALL
             return self._send(200, data)
 
+        if step in ("subs", "sub"):
+            who, _ = _who(self.headers)
+            if not who or who.get("uid") not in ADMINS:
+                return self._send(403, {"error": "только для автора"})
+            if not STORE:
+                return self._send(503, {"error": "хранилище не подключено"})
+            if step == "sub":
+                uid = g("uid")
+                if not re.match(r"^[0-9]{5,25}$", uid):
+                    return self._send(400, {"error": "нужен Discord ID"})
+                return self._send(200, {"uid": uid, "until": sub_until(uid),
+                                        "vip": uid in VIP})
+            uids = (redis(["SMEMBERS", "subs"]) or [[]])[0] or []
+            untils = redis(*[["GET", "sub:" + u] for u in uids]) if uids else []
+            now = time.time()
+            rows = [{"uid": u, "until": int(t or 0)}
+                    for u, t in zip(uids, untils or [])]
+            return self._send(200, {
+                "active": sorted([r for r in rows if r["until"] > now],
+                                 key=lambda r: r["until"]),
+                "expired": len([r for r in rows if 0 < r["until"] <= now]),
+                "vip": sorted(VIP)})
+
         if step == "download":
             who, _ = _who(self.headers)
             if not who:
