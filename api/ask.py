@@ -169,6 +169,29 @@ TIMEOUT = 60
 # FIRST_WAIT секунд, а если молчит — остаток уходит запасной: лучше
 # ответ Grok через 40 секунд, чем ошибка на 60-й.
 TOTAL_WAIT = 52
+_R_URL = (os.environ.get("KV_REST_API_URL") or
+          os.environ.get("UPSTASH_REDIS_REST_URL") or "").rstrip("/")
+_R_TOKEN = (os.environ.get("KV_REST_API_TOKEN") or
+            os.environ.get("UPSTASH_REDIS_REST_TOKEN") or "")
+
+
+def _count_question(provider):
+    """Вопрос в статистику автора. Нет хранилища — молча пропускаем."""
+    if not (_R_URL and _R_TOKEN):
+        return
+    d = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 3 * 3600))
+    keep = 400 * 24 * 3600
+    cmds = [["INCR", "q:d:" + d], ["EXPIRE", "q:d:" + d, keep],
+            ["HINCRBY", "qnet:d:" + d, provider, 1],
+            ["EXPIRE", "qnet:d:" + d, keep]]
+    try:
+        req = urllib.request.Request(
+            _R_URL + "/pipeline", data=json.dumps(cmds).encode("utf-8"),
+            method="POST", headers={"Authorization": "Bearer " + _R_TOKEN,
+                                    "Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=4).read()
+    except Exception:
+        pass                         # статистика не должна мешать ответу
 FIRST_WAIT = 25
 import threading as _th
 _deadline = _th.local()
@@ -521,6 +544,7 @@ class handler(BaseHTTPRequestHandler):
         if last is not None:
             raise last
         provider = used
+        _count_question(provider)
 
         try:
             pass

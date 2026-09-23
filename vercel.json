@@ -1,13 +1,10 @@
 {
   "functions": {
-    "api/ask.py": {
-      "maxDuration": 60
-    }
+    "api/ask.py": { "maxDuration": 60 },
+    "api/auth.py": { "maxDuration": 20 }
   },
   "rewrites": [
-    {
-      "source": "/ask",
-      "destination": "/api/ask"
-    }
+    { "source": "/ask", "destination": "/api/ask" },
+    { "source": "/auth", "destination": "/api/auth" }
   ]
 }
