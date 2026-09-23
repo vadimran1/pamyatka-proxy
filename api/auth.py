@@ -222,7 +222,136 @@ def report():
                             for v, c in zip(vers, vcount)),
                            key=lambda x: -x["users"]),
         "questions_today_by_net": {k: int(v) for k, v in qnet.items()},
+        **subs_report(),
     }
+
+
+# ------------------------------------------------------------- подписка ---
+PRICE = int(os.environ.get("PAMYATKA_PRICE", "50") or 50)
+DAYS = int(os.environ.get("PAMYATKA_SUB_DAYS", "30") or 30)
+WALLET = os.environ.get("YOOMONEY_WALLET", "").strip()
+YM_SECRET = os.environ.get("YOOMONEY_SECRET", "").strip()
+PAYWALL = os.environ.get("PAMYATKA_PAYWALL", "").strip().lower() in (
+    "1", "on", "yes", "true")
+FOREVER = 4102444800                   # 2100 год: для списка PAMYATKA_VIP_IDS
+
+
+def sub_until(uid):
+    """До какого момента у человека подписка (0 — нет)."""
+    if not uid:
+        return 0
+    if uid in VIP:
+        return FOREVER
+    try:
+        r = redis(["GET", "sub:" + uid])
+        return int((r or [0])[0] or 0)
+    except Exception:
+        return 0
+
+
+def extend_sub(uid, days):
+    """Продлить подписку: к сроку, если ещё идёт, иначе от сейчас."""
+    now = int(time.time())
+    cur = sub_until(uid)
+    if days <= 0:
+        redis(["DEL", "sub:" + uid], ["SREM", "subs", uid])
+        return 0
+    until = max(now, cur if cur < FOREVER else now) + days * 86400
+    redis(["SET", "sub:" + uid, str(until)], ["SADD", "subs", uid])
+    return until
+
+
+def month():
+    return time.strftime("%Y-%m", time.gmtime(time.time() + MSK))
+
+
+def ym_valid(f):
+    """Подпись уведомления ЮMoney: sha1 от полей через & с секретом."""
+    raw = "&".join([f.get("notification_type", ""), f.get("operation_id", ""),
+                    f.get("amount", ""), f.get("currency", ""),
+                    f.get("datetime", ""), f.get("sender", ""),
+                    f.get("codepro", ""), YM_SECRET, f.get("label", "")])
+    good = hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(good, (f.get("sha1_hash") or "").lower())
+
+
+def handle_payment(f):
+    """Уведомление об оплате: проверяем и продлеваем. Возвращает итог."""
+    if not YM_SECRET or not ym_valid(f):
+        return "bad-signature"
+    if f.get("test_notification") == "true":
+        return "test-ok"               # кнопка «Протестировать» в ЮMoney
+    if f.get("unaccepted") == "true":
+        return "unaccepted"            # деньги ещё не зачислены
+    if f.get("currency") != "643":
+        return "not-rub"
+    m = re.match(r"^pm1:([0-9]{5,25})$", f.get("label") or "")
+    if not m:
+        return "no-label"
+    uid = m.group(1)
+    try:
+        paid = float(f.get("withdraw_amount") or 0)
+        got = float(f.get("amount") or 0)
+    except ValueError:
+        return "bad-amount"
+    # платящий вносит сумму целиком, а на кошелёк приходит за вычетом
+    # комиссии: смотрим, сколько он заплатил, а если этого поля нет —
+    # сколько пришло, с поправкой на комиссию
+    if not (paid >= PRICE or got >= PRICE * 0.95):
+        return "too-little"
+    op = f.get("operation_id") or ""
+    first = redis(["SET", "op:" + op, "1", "NX", "EX", 400 * 86400])
+    if not first or first[0] is None:
+        return "duplicate"             # ЮMoney иногда повторяет уведомление
+    until = extend_sub(uid, DAYS)
+    mo = month()
+    note = json.dumps({"uid": uid, "rub": paid or got, "at": int(time.time()),
+                       "until": until}, ensure_ascii=False)
+    redis(["INCRBYFLOAT", "rev:m:" + mo, str(paid or got)],
+          ["INCR", "pays:m:" + mo],
+          ["LPUSH", "paylog", note], ["LTRIM", "paylog", 0, 49])
+    return "ok"
+
+
+def subs_report():
+    uids = (redis(["SMEMBERS", "subs"]) or [[]])[0] or []
+    untils = redis(*[["GET", "sub:" + u] for u in uids]) if uids else []
+    now = time.time()
+    active = sum(1 for t in (untils or []) if t and int(t) > now)
+    mo = month()
+    rev, pays, log = redis(["GET", "rev:m:" + mo], ["GET", "pays:m:" + mo],
+                           ["LRANGE", "paylog", 0, 9])
+    return {"subs_active": active + len(VIP),
+            "revenue_month": round(float(rev or 0), 2),
+            "payments_month": int(pays or 0),
+            "recent_payments": [json.loads(x) for x in (log or [])]}
+
+
+PAY_PAGE = """<!doctype html><html lang="ru"><meta charset="utf-8">
+<title>Памятка RMRP — подписка</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;
+background:#0b0f17;color:#eef2f8;font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+.c{max-width:28rem;padding:2rem 2.2rem;border-radius:1.2rem;text-align:center;
+background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}
+h1{font-size:1.35rem;margin:0 0 .4rem}p{color:rgba(238,242,248,.7);margin:.3rem 0}
+.p{font-size:2.4rem;font-weight:700;margin:.6rem 0}button{font:inherit;border:0;
+border-radius:.8rem;padding:.75rem 1.2rem;margin:.35rem;cursor:pointer;
+color:#fff;background:linear-gradient(135deg,#5b9dff,#7b6bff)}
+button.w{background:rgba(255,255,255,.12)}small{color:rgba(238,242,248,.45)}</style>
+<div class="c"><h1>Подписка на нейросети</h1>
+<p>Gemini и Grok в помощнике Памятки на {days} дней.</p>
+<div class="p">{price} ₽</div>
+<form method="POST" action="https://yoomoney.ru/quickpay/confirm">
+<input type="hidden" name="receiver" value="{wallet}">
+<input type="hidden" name="quickpay-form" value="button">
+<input type="hidden" name="sum" value="{price}">
+<input type="hidden" name="label" value="{label}">
+<input type="hidden" name="successURL" value="{back}">
+<button name="paymentType" value="AC">Оплатить картой</button>
+<button class="w" name="paymentType" value="PC">Кошельком ЮMoney</button>
+</form>
+<p><small>Discord ID: {uid}. После оплаты вернитесь в Памятку —
+подписка включится в течение минуты.</small></p></div></html>"""
 
 
 # ------------------------------------------------------------- подпись ---
@@ -358,7 +487,37 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        if (q.get("step") or [""])[0] != "ping":
+        step = (q.get("step") or [""])[0]
+        if step == "yoomoney":
+            n = min(int(self.headers.get("Content-Length") or 0), 8192)
+            form = {k: v[0] for k, v in urllib.parse.parse_qs(
+                self.rfile.read(n).decode("utf-8", "replace"),
+                keep_blank_values=True).items()}
+            try:
+                res = handle_payment(form)
+            except Exception as e:
+                res = "error " + type(e).__name__
+            print("ЮMoney:", res, form.get("operation_id"), form.get("label"))
+            # 200 даже на отказ: иначе ЮMoney будет слать повторы без конца
+            return self._send(200, {"result": res})
+        if step == "grant":
+            auth = self.headers.get("Authorization", "")
+            who = verify(auth[7:] if auth.startswith("Bearer ") else "")
+            if not who or who.get("uid") not in ADMINS:
+                return self._send(403, {"error": "только для автора"})
+            try:
+                n = min(int(self.headers.get("Content-Length") or 0), 2048)
+                body = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+                uid, days = str(body.get("uid") or ""), int(body.get("days"))
+            except Exception:
+                return self._send(400, {"error": "нужны uid и days"})
+            if not re.match(r"^[0-9]{5,25}$", uid) or not -1 <= days <= 3650:
+                return self._send(400, {"error": "не тот uid или срок"})
+            if not STORE:
+                return self._send(503, {"error": "хранилище не подключено"})
+            return self._send(200, {"uid": uid,
+                                    "until": extend_sub(uid, days)})
+        if step != "ping":
             return self._send(404, {"error": "нет такого адреса"})
         try:
             n = min(int(self.headers.get("Content-Length") or 0), 4096)
@@ -386,7 +545,9 @@ class handler(BaseHTTPRequestHandler):
         ready = bool(CLIENT_ID and CLIENT_SECRET)
 
         if step == "status":
-            out = {"configured": ready, "stats": STORE}
+            out = {"configured": ready, "stats": STORE,
+                   "pay": bool(WALLET and YM_SECRET), "price": PRICE,
+                   "days": DAYS, "paywall": PAYWALL}
             if not out["stats"]:
                 out["storage_vars"] = storage_names()
             return self._send(200, out)
@@ -421,10 +582,33 @@ class handler(BaseHTTPRequestHandler):
             data = verify(auth[7:] if auth.startswith("Bearer ") else "")
             if not data:
                 return self._send(401, {"error": "пропуск недействителен"})
-            # план пересчитываем при каждой проверке: убрали из списка —
-            # подписка пропала без перевыпуска пропуска
-            data["plan"] = "vip" if data.get("uid") in VIP else "free"
+            # план пересчитываем при каждой проверке: оплатил — подписка
+            # появилась без нового входа, кончилась — пропала
+            until = sub_until(data.get("uid"))
+            data["sub_until"] = until
+            data["plan"] = "vip" if until > time.time() else "free"
+            data["price"], data["paywall"] = PRICE, PAYWALL
             return self._send(200, data)
+
+        if step == "pay":
+            uid = g("uid")
+            if not re.match(r"^[0-9]{5,25}$", uid):
+                return self._html(400, "Не тот адрес",
+                                  "Откройте оплату из программы.")
+            if not WALLET:
+                return self._html(503, "Оплата ещё не подключена",
+                                  "Автор пока не подключил приём оплаты.")
+            page = PAY_PAGE
+            for k, v in (("{days}", DAYS), ("{price}", PRICE),
+                         ("{wallet}", WALLET), ("{label}", "pm1:" + uid),
+                         ("{back}", BASE + "/auth?step=paid"), ("{uid}", uid)):
+                page = page.replace(k, str(v))
+            return self._send(200, page, "text/html; charset=utf-8")
+
+        if step == "paid":
+            return self._html(200, "Спасибо за оплату",
+                              "Вернитесь в Памятку: подписка включится в "
+                              "течение минуты. Вкладку можно закрыть.")
 
         if not ready:
             return self._html(503, "Вход ещё не настроен",

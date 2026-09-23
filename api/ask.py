@@ -263,6 +263,77 @@ _R_URL, _R_TOKEN = _find_redis()
 _R_TCP = "" if (_R_URL and _R_TOKEN) else _find_tcp()
 
 
+def _rq(*cmds):
+    """Команды хранилища одним заходом; нет хранилища — None."""
+    if _R_URL and _R_TOKEN:
+        req = urllib.request.Request(
+            _R_URL + "/pipeline", data=json.dumps(list(cmds)).encode("utf-8"),
+            method="POST", headers={"Authorization": "Bearer " + _R_TOKEN,
+                                    "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return [x.get("result") for x in json.loads(r.read().decode())]
+    if _R_TCP:
+        return _resp_pipeline(_R_TCP, cmds)
+    return None
+
+
+# Платный доступ к нейросетям. Пока PAMYATKA_PAYWALL не включён,
+# отвечаем всем, как раньше: иначе люди остались бы без помощника
+# раньше, чем появится возможность заплатить.
+_PAYWALL = os.environ.get("PAMYATKA_PAYWALL", "").strip().lower() in (
+    "1", "on", "yes", "true")
+_PRICE = int(os.environ.get("PAMYATKA_PRICE", "50") or 50)
+_FREE = int(os.environ.get("PAMYATKA_FREE_AI_PER_DAY", "0") or 0)
+_DSEC = os.environ.get("DISCORD_CLIENT_SECRET", "").strip()
+_VIP = {x.strip() for x in os.environ.get("PAMYATKA_VIP_IDS", "").split(",")
+        if x.strip()}
+
+
+def _session(token):
+    """Пропуск из программы — тот же, что выдаёт вход через Discord."""
+    import hmac, hashlib, base64
+    if not _DSEC or not isinstance(token, str) or token.count(".") != 1             or len(token) > 4096:
+        return None
+    try:
+        body, mac = token.split(".")
+        key = hmac.new(_DSEC.encode("utf-8"), b"pamyatka-session-v1",
+                       hashlib.sha256).digest()
+        good = base64.urlsafe_b64encode(hmac.new(
+            key, body.encode("ascii"), hashlib.sha256).digest()).rstrip(b"=")
+        if not hmac.compare_digest(good, mac.encode("ascii")):
+            return None
+        data = json.loads(base64.urlsafe_b64decode(
+            body + "=" * ((4 - len(body)) & 3)).decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(data, dict) or data.get("exp", 0) < time.time():
+        return None
+    return data
+
+
+def _may_ask(uid):
+    """Можно ли этому человеку спросить нейросеть прямо сейчас."""
+    if uid in _VIP:
+        return True
+    try:
+        r = _rq(["GET", "sub:" + uid])
+    except Exception:
+        return True                    # хранилище упало — не наказываем платящих
+    if r is None:
+        return False
+    if int(r[0] or 0) > time.time():
+        return True
+    if _FREE > 0:                      # пробные вопросы в день, если заданы
+        d = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 3 * 3600))
+        try:
+            n = _rq(["INCR", "free:" + uid + ":" + d],
+                    ["EXPIRE", "free:" + uid + ":" + d, 2 * 86400])
+            return int(n[0]) <= _FREE
+        except Exception:
+            return False
+    return False
+
+
 def _count_question(provider):
     """Вопрос в статистику автора. Нет хранилища — молча пропускаем."""
     if not ((_R_URL and _R_TOKEN) or _R_TCP):
@@ -591,6 +662,18 @@ class handler(BaseHTTPRequestHandler):
         question = (payload.get("question") or "").strip()
         if not question:
             return self._send(400, {"error": "пустой вопрос"})
+
+        if _PAYWALL:
+            who = _session(payload.get("token"))
+            if not who:
+                return self._send(401, {
+                    "error": "Нейросети доступны после входа через Discord.",
+                    "need": "login"})
+            if not _may_ask(str(who.get("uid") or "")):
+                return self._send(402, {
+                    "error": "Нейросети — по подписке: " + str(_PRICE) +
+                             " ₽ в месяц.", "need": "subscription",
+                    "price": _PRICE})
 
         # сеть выбирает пользователь в программе; чужое значение не берём
         want = (payload.get("provider") or "").strip().lower()
