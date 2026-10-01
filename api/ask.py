@@ -280,6 +280,8 @@ def _rq(*cmds):
 # Платный доступ к нейросетям. Пока PAMYATKA_PAYWALL не включён,
 # отвечаем всем, как раньше: иначе люди остались бы без помощника
 # раньше, чем появится возможность заплатить.
+# Проект закрыт: нейросети не отвечают. Открыть — PAMYATKA_CLOSED=0.
+_CLOSED = os.environ.get("PAMYATKA_CLOSED", "1").strip() not in ("0", "no", "false")
 _PAYWALL = os.environ.get("PAMYATKA_PAYWALL", "").strip().lower() in (
     "1", "on", "yes", "true")
 _PRICE = int(os.environ.get("PAMYATKA_PRICE", "50") or 50)
@@ -628,7 +630,7 @@ class handler(BaseHTTPRequestHandler):
                                         "error": str(e)[:150]})
 
         have = [n for n in KNOWN if key_for(n)]
-        out = {"ok": True, "provider": PROVIDER, "key": bool(KEY),
+        out = {"ok": True, "closed": _CLOSED, "provider": PROVIDER, "key": bool(KEY),
                "keys": have,
                "key_from": {n: key_source(n) for n in KNOWN
                             if key_for(n)},
@@ -640,6 +642,9 @@ class handler(BaseHTTPRequestHandler):
         self._send(200, out)
 
     def do_POST(self):
+        if _CLOSED:
+            return self._send(410, {"error": "Проект закрыт — нейросети "
+                                             "отключены.", "closed": True})
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:

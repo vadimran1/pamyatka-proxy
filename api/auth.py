@@ -49,6 +49,12 @@ STATE_TTL = 600                        # на сам вход — десять �
 VIP = {x.strip() for x in os.environ.get("PAMYATKA_VIP_IDS", "").split(",")
        if x.strip()}
 UA = "PamyatkaAuth/1.0 (+https://pamyatka-proxy.vercel.app)"
+# Проект закрыт: вход, скачивание и оплата выключены. Открыть обратно —
+# PAMYATKA_CLOSED=0 в переменных Vercel.
+CLOSED = os.environ.get("PAMYATKA_CLOSED", "1").strip() not in ("0", "no", "false")
+CLOSED_TITLE = "Проект закрыт"
+CLOSED_TEXT = ("Памятка RMRP больше не развивается: вход, скачивание, "
+               "подписка и нейросети отключены. Спасибо всем, кто пользовался!")
 ADMINS = {x.strip() for x in
           os.environ.get("PAMYATKA_ADMIN_IDS", "").split(",") if x.strip()}
 def _find_redis():
@@ -518,6 +524,10 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         step = (q.get("step") or [""])[0]
+        if CLOSED:
+            # отметки старых версий и уведомления ЮMoney просто принимаем:
+            # хранилища больше нет, а повторять запрос им незачем
+            return self._send(200, {"ok": False, "closed": True})
         if step == "yoomoney":
             n = min(int(self.headers.get("Content-Length") or 0), 8192)
             form = {k: v[0] for k, v in urllib.parse.parse_qs(
@@ -573,6 +583,21 @@ class handler(BaseHTTPRequestHandler):
         g = lambda k: (q.get(k) or [""])[0]
         step = g("step")
         ready = bool(CLIENT_ID and CLIENT_SECRET)
+
+        if CLOSED:
+            if step == "status":
+                return self._send(200, {"configured": False, "stats": False,
+                                        "pay": False, "price": 0, "days": 0,
+                                        "paywall": False, "closed": True})
+            if step == "me":
+                return self._send(410, {"error": CLOSED_TEXT, "closed": True})
+            if step == "logout":
+                return self._send(302, b"", "text/plain", {
+                    "Location": BASE + "/",
+                    "Set-Cookie": COOKIE + "=; Path=/; Max-Age=0; HttpOnly; "
+                                           "Secure; SameSite=Lax"})
+            if step not in ("stats", "subs", "sub"):
+                return self._html(410, CLOSED_TITLE, CLOSED_TEXT)
 
         if step == "status":
             out = {"configured": ready, "stats": STORE,
