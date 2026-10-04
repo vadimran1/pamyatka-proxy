@@ -27,8 +27,16 @@ Discord, Discord возвращает его сюда, а отсюда брау�
   ?step=me              кто владелец пропуска (Authorization: Bearer)
   POST ?step=ping       отметка о запуске {id, ver, token?}
   ?step=stats           отчёт для автора (Authorization: Bearer)
+  ?step=pay&uid         оплата подписки — уводит на страницу Platega
+  ?step=paid&o          возврат после оплаты: проверяем и включаем
+  POST ?step=platega    уведомление Platega об оплате (callback)
+
+Подписка. Срок подписки, заказы и платежи хранятся в Postgres (Neon),
+там же, где форум. Уведомлению Platega на слово не верим: по номеру
+транзакции сами спрашиваем у Platega статус и сумму и только потом
+продлеваем. Каждый платёж засчитывается один раз.
 """
-import os, re, json, time, hmac, base64, hashlib
+import os, re, json, time, hmac, base64, hashlib, secrets
 import urllib.request, urllib.parse, urllib.error
 from http.server import BaseHTTPRequestHandler
 
@@ -171,6 +179,71 @@ REDIS_URL, REDIS_TOKEN = _find_redis()
 REDIS_TCP = "" if (REDIS_URL and REDIS_TOKEN) else _find_tcp()
 STORE = bool((REDIS_URL and REDIS_TOKEN) or REDIS_TCP)
 KEEP = 400 * 24 * 3600                # дневные счётчики живут чуть больше года
+
+
+# ------------------------------------------------------------ Postgres ---
+# Подписки и платежи — в Postgres (Neon), как форум. Vercel кладёт адрес в
+# DATABASE_URL (бывает с приставкой: STORAGE_DATABASE_URL), поэтому ищем
+# по окончанию имени.
+def _find_pg():
+    env = os.environ
+    for end in ("DATABASE_URL", "POSTGRES_URL"):
+        for name in sorted(env):
+            if name.endswith(end) and env[name].startswith(
+                    ("postgres://", "postgresql://")):
+                return env[name]
+    return ""
+
+
+PG_URL = _find_pg()
+PG_SCHEMA = (
+    """CREATE TABLE IF NOT EXISTS pm_subs (
+        uid TEXT PRIMARY KEY, until BIGINT NOT NULL, updated BIGINT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS pm_orders (
+        id TEXT PRIMARY KEY, uid TEXT NOT NULL, rub NUMERIC NOT NULL,
+        tx TEXT UNIQUE, created BIGINT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS pm_payments (
+        tx TEXT PRIMARY KEY, uid TEXT NOT NULL, rub NUMERIC NOT NULL,
+        status TEXT NOT NULL, at BIGINT NOT NULL, until BIGINT)""",
+)
+_pg = {"conn": None, "ready": False}
+
+
+def pg(fn, *args):
+    """fn(cur, *args) в одной транзакции Postgres.
+
+    Neon усыпляет базу, и соединение тёплого экземпляра может оказаться
+    мёртвым — тогда один раз переподключаемся. При первом заходе
+    создаём таблицы.
+    """
+    import psycopg2
+    for attempt in (0, 1):
+        try:
+            c = _pg["conn"]
+            if c is None or c.closed:
+                c = _pg["conn"] = psycopg2.connect(
+                    PG_URL, connect_timeout=10, application_name="pamyatka-auth")
+            with c:                            # commit, а при ошибке rollback
+                with c.cursor() as cur:
+                    cur.execute("SET LOCAL statement_timeout = 8000")
+                    if not _pg["ready"]:
+                        for sql in PG_SCHEMA:
+                            cur.execute(sql)
+                    res = fn(cur, *args)
+            _pg["ready"] = True
+            return res
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            old, _pg["conn"] = _pg["conn"], None
+            try:
+                old.close()
+            except Exception:
+                pass
+            if attempt:
+                raise
+
+
+# где живут подписки: Postgres, а если его нет — Redis, как раньше
+SUBS = "postgres" if PG_URL else ("redis" if STORE else "")
 MSK = 3 * 3600                        # сутки считаем по Москве, а не по UTC
 
 
@@ -250,11 +323,35 @@ def downloads_report():
 # ------------------------------------------------------------- подписка ---
 PRICE = int(os.environ.get("PAMYATKA_PRICE", "50") or 50)
 DAYS = int(os.environ.get("PAMYATKA_SUB_DAYS", "30") or 30)
-WALLET = os.environ.get("YOOMONEY_WALLET", "").strip()
-YM_SECRET = os.environ.get("YOOMONEY_SECRET", "").strip()
-PAYWALL = os.environ.get("PAMYATKA_PAYWALL", "").strip().lower() in (
-    "1", "on", "yes", "true")
+# Нейросети — только по подписке. Выключить: PAMYATKA_PAYWALL=0.
+PAYWALL = os.environ.get("PAMYATKA_PAYWALL", "1").strip().lower() not in (
+    "0", "off", "no", "false")
 FOREVER = 4102444800                   # 2100 год: для списка PAMYATKA_VIP_IDS
+UID_RE = re.compile(r"^[0-9]{5,25}$")
+TX_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+                   r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+ORDER_RE = re.compile(r"^[0-9a-f]{24}$")
+
+
+def _pg_until(cur, uid):
+    cur.execute("SELECT until FROM pm_subs WHERE uid = %s", (uid,))
+    row = cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+def _pg_extend(cur, uid, days):
+    """Продлить в той же транзакции: к сроку, если ещё идёт, иначе от сейчас."""
+    now = int(time.time())
+    if days <= 0:
+        cur.execute("DELETE FROM pm_subs WHERE uid = %s", (uid,))
+        return 0
+    add = days * 86400
+    cur.execute(
+        "INSERT INTO pm_subs (uid, until, updated) VALUES (%s, %s, %s) "
+        "ON CONFLICT (uid) DO UPDATE SET until = CASE WHEN pm_subs.until > %s "
+        "THEN pm_subs.until ELSE %s END + %s, updated = %s RETURNING until",
+        (uid, now + add, now, now, now, add, now))
+    return int(cur.fetchone()[0])
 
 
 def sub_until(uid):
@@ -264,6 +361,8 @@ def sub_until(uid):
     if uid in VIP:
         return FOREVER
     try:
+        if SUBS == "postgres":
+            return pg(_pg_until, uid)
         r = redis(["GET", "sub:" + uid])
         return int((r or [0])[0] or 0)
     except Exception:
@@ -271,7 +370,9 @@ def sub_until(uid):
 
 
 def extend_sub(uid, days):
-    """Продлить подписку: к сроку, если ещё идёт, иначе от сейчас."""
+    """Продлить подписку (выдача автором). days <= 0 — снять."""
+    if SUBS == "postgres":
+        return pg(_pg_extend, uid, days)
     now = int(time.time())
     cur = sub_until(uid)
     if days <= 0:
@@ -286,93 +387,166 @@ def month():
     return time.strftime("%Y-%m", time.gmtime(time.time() + MSK))
 
 
-def ym_valid(f):
-    """Подпись уведомления ЮMoney: sha1 от полей через & с секретом."""
-    raw = "&".join([f.get("notification_type", ""), f.get("operation_id", ""),
-                    f.get("amount", ""), f.get("currency", ""),
-                    f.get("datetime", ""), f.get("sender", ""),
-                    f.get("codepro", ""), YM_SECRET, f.get("label", "")])
-    good = hashlib.sha1(raw.encode("utf-8")).hexdigest()
-    return hmac.compare_digest(good, (f.get("sha1_hash") or "").lower())
-
-
-def handle_payment(f):
-    """Уведомление об оплате: проверяем и продлеваем. Возвращает итог."""
-    if not YM_SECRET or not ym_valid(f):
-        return "bad-signature"
-    if f.get("test_notification") == "true":
-        return "test-ok"               # кнопка «Протестировать» в ЮMoney
-    if f.get("unaccepted") == "true":
-        return "unaccepted"            # деньги ещё не зачислены
-    if f.get("currency") != "643":
-        return "not-rub"
-    m = re.match(r"^pm1:([0-9]{5,25})$", f.get("label") or "")
-    if not m:
-        return "no-label"
-    uid = m.group(1)
-    try:
-        paid = float(f.get("withdraw_amount") or 0)
-        got = float(f.get("amount") or 0)
-    except ValueError:
-        return "bad-amount"
-    # платящий вносит сумму целиком, а на кошелёк приходит за вычетом
-    # комиссии: смотрим, сколько он заплатил, а если этого поля нет —
-    # сколько пришло, с поправкой на комиссию
-    if not (paid >= PRICE or got >= PRICE * 0.95):
-        return "too-little"
-    op = f.get("operation_id") or ""
-    first = redis(["SET", "op:" + op, "1", "NX", "EX", 400 * 86400])
-    if not first or first[0] is None:
-        return "duplicate"             # ЮMoney иногда повторяет уведомление
-    until = extend_sub(uid, DAYS)
-    mo = month()
-    note = json.dumps({"uid": uid, "rub": paid or got, "at": int(time.time()),
-                       "until": until}, ensure_ascii=False)
-    redis(["INCRBYFLOAT", "rev:m:" + mo, str(paid or got)],
-          ["INCR", "pays:m:" + mo],
-          ["LPUSH", "paylog", note], ["LTRIM", "paylog", 0, 49])
-    return "ok"
+def subs_rows():
+    """Все подписки: [{uid, until}] — для автора."""
+    if SUBS == "postgres":
+        def q(cur):
+            cur.execute("SELECT uid, until FROM pm_subs")
+            return [{"uid": u, "until": int(t)} for u, t in cur.fetchall()]
+        return pg(q)
+    uids = (redis(["SMEMBERS", "subs"]) or [[]])[0] or []
+    untils = redis(*[["GET", "sub:" + u] for u in uids]) if uids else []
+    return [{"uid": u, "until": int(t or 0)} for u, t in zip(uids, untils or [])]
 
 
 def subs_report():
-    uids = (redis(["SMEMBERS", "subs"]) or [[]])[0] or []
-    untils = redis(*[["GET", "sub:" + u] for u in uids]) if uids else []
     now = time.time()
-    active = sum(1 for t in (untils or []) if t and int(t) > now)
-    mo = month()
-    rev, pays, log = redis(["GET", "rev:m:" + mo], ["GET", "pays:m:" + mo],
-                           ["LRANGE", "paylog", 0, 9])
-    return {"subs_active": active + len(VIP),
-            "revenue_month": round(float(rev or 0), 2),
-            "payments_month": int(pays or 0),
-            "recent_payments": [json.loads(x) for x in (log or [])]}
+    try:
+        active = sum(1 for r in subs_rows() if r["until"] > now)
+    except Exception:
+        active = 0
+    out = {"subs_active": active + len(VIP), "revenue_month": 0.0,
+           "payments_month": 0, "recent_payments": []}
+    if SUBS != "postgres":
+        return out
+    # начало месяца по Москве
+    import calendar
+    t = time.gmtime(now + MSK)
+    start = calendar.timegm((t.tm_year, t.tm_mon, 1, 0, 0, 0)) - MSK
+
+    def q(cur):
+        cur.execute("SELECT COALESCE(SUM(rub), 0), COUNT(*) FROM pm_payments "
+                    "WHERE status = 'CONFIRMED' AND at >= %s", (start,))
+        rev, n = cur.fetchone()
+        cur.execute("SELECT uid, rub, at, until, status FROM pm_payments "
+                    "ORDER BY at DESC LIMIT 10")
+        log = [{"uid": u, "rub": float(r), "at": int(a), "until": int(un or 0),
+                "status": s} for u, r, a, un, s in cur.fetchall()]
+        return float(rev), int(n), log
+    try:
+        out["revenue_month"], out["payments_month"], out["recent_payments"] = pg(q)
+    except Exception:
+        pass
+    return out
 
 
-PAY_PAGE = """<!doctype html><html lang="ru"><meta charset="utf-8">
-<title>Памятка RMRP — подписка</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;
-background:#0b0f17;color:#eef2f8;font:16px/1.5 "Segoe UI",system-ui,sans-serif}
-.c{max-width:28rem;padding:2rem 2.2rem;border-radius:1.2rem;text-align:center;
-background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}
-h1{font-size:1.35rem;margin:0 0 .4rem}p{color:rgba(238,242,248,.7);margin:.3rem 0}
-.p{font-size:2.4rem;font-weight:700;margin:.6rem 0}button{font:inherit;border:0;
-border-radius:.8rem;padding:.75rem 1.2rem;margin:.35rem;cursor:pointer;
-color:#fff;background:linear-gradient(135deg,#5b9dff,#7b6bff)}
-button.w{background:rgba(255,255,255,.12)}small{color:rgba(238,242,248,.45)}</style>
-<div class="c"><h1>Подписка на нейросети</h1>
-<p>Gemini и Grok в помощнике Памятки на {days} дней.</p>
-<div class="p">{price} ₽</div>
-<form method="POST" action="https://yoomoney.ru/quickpay/confirm">
-<input type="hidden" name="receiver" value="{wallet}">
-<input type="hidden" name="quickpay-form" value="button">
-<input type="hidden" name="sum" value="{price}">
-<input type="hidden" name="label" value="{label}">
-<input type="hidden" name="successURL" value="{back}">
-<button name="paymentType" value="AC">Оплатить картой</button>
-<button class="w" name="paymentType" value="PC">Кошельком ЮMoney</button>
-</form>
-<p><small>Discord ID: {uid}. После оплаты вернитесь в Памятку —
-подписка включится в течение минуты.</small></p></div></html>"""
+# --------------------------------------------------------------- Platega ---
+PLATEGA_ID = os.environ.get("PLATEGA_MERCHANT_ID", "").strip()
+PLATEGA_SECRET = os.environ.get("PLATEGA_SECRET", "").strip()
+PLATEGA_API = os.environ.get("PLATEGA_API_URL",
+                             "https://app.platega.io").strip().rstrip("/")
+# оплату принимаем, только когда есть и Platega, и где записать подписку
+PAY_READY = bool(PLATEGA_ID and PLATEGA_SECRET and SUBS == "postgres")
+ORDERS_PER_HOUR = 10                   # защита от накрутки заказов
+
+
+def platega(method, path, body=None):
+    """Запрос к API Platega. Ошибка HTTP — исключение с текстом ответа."""
+    req = urllib.request.Request(
+        PLATEGA_API + path, method=method,
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8") if body else None,
+        headers={"X-MerchantId": PLATEGA_ID, "X-Secret": PLATEGA_SECRET,
+                 "Content-Type": "application/json", "Accept": "application/json",
+                 "User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode("utf-8") or "{}")
+
+
+def new_order(uid):
+    """Заказ в базе + транзакция в Platega. Возвращает ссылку на оплату."""
+    oid = secrets.token_hex(12)
+    now = int(time.time())
+
+    def add(cur):
+        cur.execute("SELECT COUNT(*) FROM pm_orders WHERE uid = %s AND created > %s",
+                    (uid, now - 3600))
+        if int(cur.fetchone()[0]) >= ORDERS_PER_HOUR:
+            return False
+        cur.execute("INSERT INTO pm_orders (id, uid, rub, created) "
+                    "VALUES (%s, %s, %s, %s)", (oid, uid, PRICE, now))
+        return True
+    if not pg(add):
+        raise ValueError("слишком много попыток оплаты — подождите час")
+    r = platega("POST", "/v2/transaction/process", {
+        "paymentDetails": {"amount": PRICE, "currency": "RUB"},
+        "description": "Памятка RMRP: подписка на нейросети, %d дней" % DAYS,
+        "return": BASE + "/auth?step=paid&o=" + oid,
+        "failedUrl": BASE + "/auth?step=payfail",
+        "payload": "pm1:" + uid,
+        "orderId": oid,
+        "metadata": {"userId": uid, "userName": "discord:" + uid}})
+    tx = str(r.get("transactionId") or r.get("id") or "")
+    url = str(r.get("url") or r.get("redirect") or "")
+    if not TX_RE.match(tx) or not url.startswith("https://"):
+        raise ValueError("Platega ответила без ссылки на оплату")
+
+    def link(cur):
+        cur.execute("UPDATE pm_orders SET tx = %s WHERE id = %s", (tx, oid))
+    pg(link)
+    return url
+
+
+def settle(tx):
+    """Сверить транзакцию с Platega и, если оплачена, продлить подписку.
+
+    Возвращает (итог, uid, срок). Безопасно вызывать сколько угодно раз:
+    платёж засчитывается один раз.
+    """
+    if not TX_RE.match(tx or ""):
+        return "bad-id", None, 0
+    st = platega("GET", "/transaction/" + tx)
+    status = str(st.get("status") or "").upper()
+    det = st.get("paymentDetails") or {}
+    try:
+        amount = float(det.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    currency = str(det.get("currency") or "").upper()
+
+    def order(cur):
+        cur.execute("SELECT uid, rub FROM pm_orders WHERE tx = %s", (tx,))
+        return cur.fetchone()
+    row = pg(order)
+    if row:
+        uid, want = row[0], float(row[1])
+    else:
+        # заказа нет (например, база была пуста) — берём метку из платежа
+        m = re.match(r"^pm1:([0-9]{5,25})$", str(st.get("payload") or ""))
+        if not m:
+            return "unknown-order", None, 0
+        uid, want = m.group(1), float(PRICE)
+
+    if status == "CHARGEBACKED":
+        def back(cur):
+            cur.execute("UPDATE pm_payments SET status = 'CHARGEBACKED' "
+                        "WHERE tx = %s AND status = 'CONFIRMED' RETURNING uid", (tx,))
+            if not cur.fetchone():
+                return False
+            cur.execute("UPDATE pm_subs SET until = until - %s, updated = %s "
+                        "WHERE uid = %s", (DAYS * 86400, int(time.time()), uid))
+            return True
+        return ("chargeback" if pg(back) else "chargeback-noop"), uid, 0
+    if status != "CONFIRMED":
+        return status.lower() or "unknown", uid, 0
+    if currency != "RUB" or amount + 0.01 < want:
+        return "too-little", uid, 0
+
+    def credit(cur):
+        cur.execute("INSERT INTO pm_payments (tx, uid, rub, status, at) "
+                    "VALUES (%s, %s, %s, 'CONFIRMED', %s) "
+                    "ON CONFLICT (tx) DO NOTHING RETURNING tx",
+                    (tx, uid, amount, int(time.time())))
+        if not cur.fetchone():
+            return "duplicate", _pg_until(cur, uid)
+        until = _pg_extend(cur, uid, DAYS)
+        cur.execute("UPDATE pm_payments SET until = %s WHERE tx = %s", (until, tx))
+        return "ok", until
+    res, until = pg(credit)
+    return res, uid, until
+
+
+def _date(ts):
+    return time.strftime("%d.%m.%Y", time.gmtime(ts + MSK))
 
 
 # ------------------------------------------------------------- подпись ---
@@ -525,20 +699,29 @@ class handler(BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         step = (q.get("step") or [""])[0]
         if CLOSED:
-            # отметки старых версий и уведомления ЮMoney просто принимаем:
+            # отметки старых версий и уведомления об оплате просто принимаем:
             # хранилища больше нет, а повторять запрос им незачем
             return self._send(200, {"ok": False, "closed": True})
-        if step == "yoomoney":
-            n = min(int(self.headers.get("Content-Length") or 0), 8192)
-            form = {k: v[0] for k, v in urllib.parse.parse_qs(
-                self.rfile.read(n).decode("utf-8", "replace"),
-                keep_blank_values=True).items()}
+        if step == "platega":
+            # Platega подписывает уведомление нашими же MerchantId и ключом
+            mid = self.headers.get("X-MerchantId", "")
+            sec = self.headers.get("X-Secret", "")
+            if not (PAY_READY and hmac.compare_digest(mid, PLATEGA_ID)
+                    and hmac.compare_digest(sec, PLATEGA_SECRET)):
+                return self._send(403, {"error": "не Platega"})
             try:
-                res = handle_payment(form)
+                n = min(int(self.headers.get("Content-Length") or 0), 8192)
+                body = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+                tx = str(body.get("id") or "")
+            except Exception:
+                return self._send(400, {"error": "не JSON"})
+            try:
+                res, uid, _ = settle(tx)     # статус и сумму — у Platega
             except Exception as e:
-                res = "error " + type(e).__name__
-            print("ЮMoney:", res, form.get("operation_id"), form.get("label"))
-            # 200 даже на отказ: иначе ЮMoney будет слать повторы без конца
+                print("Platega: ошибка", tx, type(e).__name__, e)
+                # не 200 — пусть Platega повторит уведомление позже
+                return self._send(500, {"error": type(e).__name__})
+            print("Platega:", res, tx, uid)
             return self._send(200, {"result": res})
         if step == "grant":
             auth = self.headers.get("Authorization", "")
@@ -553,7 +736,7 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "нужны uid и days"})
             if not re.match(r"^[0-9]{5,25}$", uid) or not -1 <= days <= 3650:
                 return self._send(400, {"error": "не тот uid или срок"})
-            if not STORE:
+            if not SUBS:
                 return self._send(503, {"error": "хранилище не подключено"})
             return self._send(200, {"uid": uid,
                                     "until": extend_sub(uid, days)})
@@ -601,8 +784,9 @@ class handler(BaseHTTPRequestHandler):
 
         if step == "status":
             out = {"configured": ready, "stats": STORE,
-                   "pay": bool(WALLET and YM_SECRET), "price": PRICE,
-                   "days": DAYS, "paywall": PAYWALL}
+                   "pay": PAY_READY, "price": PRICE, "days": DAYS,
+                   "paywall": PAYWALL, "subs": SUBS or False,
+                   "provider": "platega"}
             if not out["stats"]:
                 out["storage_vars"] = storage_names()
             return self._send(200, out)
@@ -648,7 +832,7 @@ class handler(BaseHTTPRequestHandler):
             who, _ = _who(self.headers)
             if not who or who.get("uid") not in ADMINS:
                 return self._send(403, {"error": "только для автора"})
-            if not STORE:
+            if not SUBS:
                 return self._send(503, {"error": "хранилище не подключено"})
             if step == "sub":
                 uid = g("uid")
@@ -656,11 +840,8 @@ class handler(BaseHTTPRequestHandler):
                     return self._send(400, {"error": "нужен Discord ID"})
                 return self._send(200, {"uid": uid, "until": sub_until(uid),
                                         "vip": uid in VIP})
-            uids = (redis(["SMEMBERS", "subs"]) or [[]])[0] or []
-            untils = redis(*[["GET", "sub:" + u] for u in uids]) if uids else []
+            rows = subs_rows()
             now = time.time()
-            rows = [{"uid": u, "until": int(t or 0)}
-                    for u, t in zip(uids, untils or [])]
             return self._send(200, {
                 "active": sorted([r for r in rows if r["until"] > now],
                                  key=lambda r: r["until"]),
@@ -688,23 +869,49 @@ class handler(BaseHTTPRequestHandler):
 
         if step == "pay":
             uid = g("uid")
-            if not re.match(r"^[0-9]{5,25}$", uid):
+            if not UID_RE.match(uid):
                 return self._html(400, "Не тот адрес",
                                   "Откройте оплату из программы.")
-            if not WALLET:
+            if not PAY_READY:
                 return self._html(503, "Оплата ещё не подключена",
                                   "Автор пока не подключил приём оплаты.")
-            page = PAY_PAGE
-            for k, v in (("{days}", DAYS), ("{price}", PRICE),
-                         ("{wallet}", WALLET), ("{label}", "pm1:" + uid),
-                         ("{back}", BASE + "/auth?step=paid"), ("{uid}", uid)):
-                page = page.replace(k, str(v))
-            return self._send(200, page, "text/html; charset=utf-8")
+            try:
+                return self._go(new_order(uid))
+            except ValueError as e:
+                return self._html(429, "Не получилось", str(e))
+            except Exception as e:
+                print("Platega: не создал платёж", type(e).__name__, e)
+                return self._html(502, "Оплата временно недоступна",
+                                  "Платёжный сервис не ответил. Попробуйте "
+                                  "через пару минут.")
 
         if step == "paid":
+            oid = g("o")
+            res, until = "", 0
+            if ORDER_RE.match(oid) and PAY_READY:
+                try:
+                    def tx_of(cur):
+                        cur.execute("SELECT tx FROM pm_orders WHERE id = %s", (oid,))
+                        r = cur.fetchone()
+                        return r[0] if r else None
+                    tx = pg(tx_of)
+                    if tx:
+                        res, _, until = settle(tx)
+                except Exception as e:
+                    print("Platega: проверка после оплаты", type(e).__name__, e)
+            if res in ("ok", "duplicate") and until:
+                return self._html(200, "Подписка включена",
+                                  "Нейросети доступны до %s. Вернитесь в "
+                                  "Памятку — вкладку можно закрыть." % _date(until))
             return self._html(200, "Спасибо за оплату",
-                              "Вернитесь в Памятку: подписка включится в "
-                              "течение минуты. Вкладку можно закрыть.")
+                              "Как только платёж подтвердится, подписка "
+                              "включится сама — обычно за минуту. Вернитесь "
+                              "в Памятку, вкладку можно закрыть.")
+
+        if step == "payfail":
+            return self._html(200, "Оплата не прошла",
+                              "Деньги не списаны. Можно попробовать ещё раз "
+                              "из Памятки.")
 
         if not ready:
             return self._html(503, "Вход ещё не настроен",

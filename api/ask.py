@@ -282,8 +282,9 @@ def _rq(*cmds):
 # раньше, чем появится возможность заплатить.
 # Закрыть проект (нейросети не отвечают): PAMYATKA_CLOSED=1.
 _CLOSED = os.environ.get("PAMYATKA_CLOSED", "0").strip() in ("1", "yes", "true")
-_PAYWALL = os.environ.get("PAMYATKA_PAYWALL", "").strip().lower() in (
-    "1", "on", "yes", "true")
+# Нейросети — только по подписке. Выключить: PAMYATKA_PAYWALL=0.
+_PAYWALL = os.environ.get("PAMYATKA_PAYWALL", "1").strip().lower() not in (
+    "0", "off", "no", "false")
 _PRICE = int(os.environ.get("PAMYATKA_PRICE", "50") or 50)
 _FREE = int(os.environ.get("PAMYATKA_FREE_AI_PER_DAY", "0") or 0)
 _DSEC = os.environ.get("DISCORD_CLIENT_SECRET", "").strip()
@@ -313,16 +314,67 @@ def _session(token):
     return data
 
 
+def _find_pg():
+    env = os.environ
+    for end in ("DATABASE_URL", "POSTGRES_URL"):
+        for name in sorted(env):
+            if name.endswith(end) and env[name].startswith(
+                    ("postgres://", "postgresql://")):
+                return env[name]
+    return ""
+
+
+_PG_URL = _find_pg()
+_PG = {"c": None}
+
+
+def _pg_until(uid):
+    """Срок подписки из Postgres (таблицу ведёт auth.py)."""
+    import psycopg2
+    for attempt in (0, 1):
+        try:
+            c = _PG["c"]
+            if c is None or c.closed:
+                c = _PG["c"] = psycopg2.connect(
+                    _PG_URL, connect_timeout=10, application_name="pamyatka-ask")
+            with c:
+                with c.cursor() as cur:
+                    cur.execute("SET LOCAL statement_timeout = 5000")
+                    cur.execute("SELECT until FROM pm_subs WHERE uid = %s", (uid,))
+                    row = cur.fetchone()
+            return int(row[0]) if row else 0
+        except psycopg2.ProgrammingError:
+            return 0                   # таблицы ещё нет — подписок тоже
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            old, _PG["c"] = _PG["c"], None
+            try:
+                old.close()
+            except Exception:
+                pass
+            if attempt:
+                raise
+
+
 def _may_ask(uid):
     """Можно ли этому человеку спросить нейросеть прямо сейчас."""
     if uid in _VIP:
         return True
-    try:
-        r = _rq(["GET", "sub:" + uid])
-    except Exception:
-        return True                    # хранилище упало — не наказываем платящих
-    if r is None:
-        return False
+    if _PG_URL:
+        try:
+            if _pg_until(uid) > time.time():
+                return True
+        except Exception as e:
+            # база на минуту недоступна — платящих не наказываем
+            print("подписка: база не ответила", type(e).__name__)
+            return True
+        r = [0]
+    else:
+        try:
+            r = _rq(["GET", "sub:" + uid])
+        except Exception:
+            return True                # хранилище упало — не наказываем платящих
+        if r is None:
+            return False               # хранилища нет вовсе — только VIP
     if int(r[0] or 0) > time.time():
         return True
     if _FREE > 0:                      # пробные вопросы в день, если заданы

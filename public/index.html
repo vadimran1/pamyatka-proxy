@@ -2,11 +2,10 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Памятка RMRP — готовимся к возрождению</title>
+<title>Памятка RMRP — законы сервера под рукой</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Памятка RMRP — справочник по законам RMRP «Криминальная Москва». Готовимся к возрождению: предлагайте идеи для новой версии на форуме предложений.">
+<meta name="description" content="Памятка RMRP — справочник по законам RMRP «Криминальная Москва»: поиск статей, помощник, памятки, плашка поверх игры. Вход через Discord, нейросети по подписке. Предлагайте идеи на форуме.">
 <meta name="theme-color" content="#0a0d13">
-<meta name="robots" content="noindex">
 <link rel="icon" href="favicon.png">
 <style>
 :root {
@@ -61,6 +60,13 @@ h1 .glow { background: linear-gradient(100deg, #ffe2a6 0%, var(--gold) 40%, #ff9
   text-shadow: 0 0 40px rgba(255,200,97,.18); }
 .cta { display: inline-flex; align-items: center; gap: 8px; margin-top: 26px; padding: 12px 22px; border-radius: 14px; font-weight: 650; color: #1a1205;
   background: linear-gradient(135deg, #ffd98a, #ffb35c); box-shadow: 0 10px 30px -10px rgba(255,180,90,.55); transition: transform .15s var(--ease), box-shadow .15s; }
+.ctas { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.cta.ghost { color: var(--text); background: rgba(255,255,255,.07); border: 1px solid var(--stroke); box-shadow: none; }
+.nav .btn { margin-left: 4px; }
+.who { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); font-size: .9rem; padding: 4px 8px; border-radius: 10px; }
+.who:hover { background: rgba(255,255,255,.07); color: var(--text); }
+.ava { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; padding: 12px 18px; border-radius: 99px; }
 .cta:hover { transform: translateY(-1px); box-shadow: 0 14px 34px -10px rgba(255,180,90,.7); }
 
 .hero { padding: 90px 0 30px; text-align: center; }
@@ -215,31 +221,36 @@ footer b { color: var(--dim); font-weight: 600; }
 <div class="wrap">
   <nav class="nav glass">
     <span class="brand"><span class="logo"><svg class="i"><use href="#scale"/></svg></span>Памятка RMRP</span>
-    <div class="links"><a href="#forum">Предложения</a><a href="#what">Что сейчас</a><a href="#screens">Как это было</a><a href="#faq">Вопросы</a></div>
+    <div class="links"><a href="#what">Что умеет</a><a href="#screens">Как выглядит</a><a href="#forum">Предложения</a><a href="#faq">Вопросы</a></div>
+    <span id="acct"><a class="btn ghost sm" href="/auth?step=start&web=1&next=home">Войти</a></span>
+    <a class="btn sm" href="/auth?step=download">Скачать</a>
   </nav>
 
   <header class="hero">
-    <span class="badge rise">Памятка RMRP</span>
-    <h1>Готовимся к <span class="glow">возрождению</span></h1>
-    <p class="lead">Справочник по законам RMRP «Криминальная Москва» был на паузе — теперь мы готовим его возвращение. Скачивание, вход и нейросети пока отключены, а новая версия собирается прямо сейчас.</p>
-    <p class="thanks">Какой должна стать новая Памятка — решаем вместе с вами.</p>
-    <a class="cta" href="#forum"><svg class="i"><use href="#bulb"/></svg>Предложить идею</a>
+    <span class="badge rise">Снова работает</span>
+    <h1>Памятка RMRP <span class="glow">вернулась</span></h1>
+    <p class="lead">Справочник по законам RMRP «Криминальная Москва» снова работает: скачивание, вход через Discord и нейросети включены. Найдите статью по номеру или спросите своими словами — и получите статью и наказание за секунду.</p>
+    <p class="thanks">Какой должна стать Памятка дальше — решаем вместе с вами.</p>
+    <div class="ctas">
+      <a class="cta" href="/auth?step=download"><svg class="i"><use href="#up"/></svg>Скачать для Windows</a>
+      <a class="cta ghost" href="#forum"><svg class="i"><use href="#bulb"/></svg>Предложить идею</a>
+    </div>
 
     <div class="cards" id="what">
       <div class="card glass ok"><div class="ic"><svg class="i"><use href="#book"/></svg></div>
-        <h3>Уже установили — пользуйтесь</h3>
-        <p>Законы, поиск, помощник, памятки и фразы хранятся на вашем компьютере и работают без интернета. При запуске программа покажет, что проект закрыт: нажмите «Пользоваться без сети».</p></div>
-      <div class="card glass off"><div class="ic"><svg class="i"><use href="#power"/></svg></div>
-        <h3>Что пока отключено</h3>
-        <p>Скачивание и установка, вход через Discord, нейросети Gemini и Grok, статистика. Что вернётся в новой версии — смотрите по предложениям ниже.</p></div>
+        <h3>Бесплатно</h3>
+        <p>Все законы сервера, поиск по номеру и словам, помощник, понимающий сленг, памятки, фразы, голосовой ввод и плашка поверх игры.</p></div>
+      <div class="card glass ok"><div class="ic"><svg class="i"><use href="#chat"/></svg></div>
+        <h3>Вход через Discord</h3>
+        <p>Памятка работает только после входа — пароль не нужен, программа получает лишь ник, аватар и номер аккаунта. Скачать тоже можно после входа.</p></div>
       <div class="card glass"><div class="ic"><svg class="i"><use href="#heart"/></svg></div>
-        <h3>Законы меняются</h3>
-        <p>В программе остались законы на момент закрытия. Если формулировка важна — сверяйтесь с актуальным разделом на форуме сервера.</p></div>
+        <h3>Нейросети — по подписке</h3>
+        <p>Gemini и Grok объясняют статьи простыми словами. Подписка <b id="price">59</b> ₽ на 30 дней, оплата через Platega — картой или СБП, без автосписаний.</p></div>
     </div>
   </header>
 
   <section id="screens">
-    <h2>Как это было</h2>
+    <h2>Как выглядит</h2>
     <p class="sub">Тёмное стекло, шесть цветовых тем, поиск по 1239 статьям и помощник, понимавший разговорный язык.</p>
     <div class="stats">
       <div class="stat glass"><b>1239</b><span>статей из законов сервера</span></div>
@@ -293,12 +304,12 @@ footer b { color: var(--dim); font-weight: 600; }
   <section id="faq">
     <h2>Вопросы</h2>
     <div class="faq">
-      <details class="glass"><summary>Когда Памятка вернётся?</summary><p>Точной даты пока нет — работа идёт. Следите за этой страницей, а идеи пишите в предложениях: по ним будем решать, с чего начать.</p></details>
-      <details class="glass"><summary>Программа у меня перестанет работать?</summary><p>Нет. Всё, что работало без интернета, продолжит работать: законы, поиск, помощник, памятки, избранное, голосовой ввод. Не будет только нейросетей и обновлений до выхода новой версии.</p></details>
-      <details class="glass"><summary>Где сейчас скачать?</summary><p>Пока нигде — скачивание закрыто. Когда Памятка вернётся, ссылка появится на этой странице. Если программа уже стоит, переустанавливать ничего не нужно.</p></details>
-      <details class="glass"><summary>Я оплачивал подписку?</summary><p>Платная подписка так и не была включена: оплата не принималась, ни с кого ничего не списывалось.</p></details>
+      <details class="glass"><summary>Как скачать?</summary><p>Нажмите «Скачать для Windows» и войдите через Discord — установщик скачается сразу после входа. Дальше программа обновляется сама.</p></details>
+      <details class="glass"><summary>У меня программа пишет «Проект закрыт»</summary><p>Перезапустите Памятку — она скачает свежие данные и откроется как обычно. Если не помогло, нажмите «Пользоваться без сети», подождите минуту и перезапустите ещё раз.</p></details>
+      <details class="glass"><summary>Как работает подписка?</summary><p>Подписка нужна только для нейросетей. Оплата разовая, на 30 дней — картой или через СБП в Platega. Автосписаний нет. Подписка включается сама, как только платёж подтвердится, обычно за минуту. Оплатить можно в программе: раздел «Аккаунт».</p></details>
+      <details class="glass"><summary>Работает без интернета?</summary><p>Законы, поиск, помощник и голос — да. Интернет нужен для первого входа, нейросетей и обновлений.</p></details>
       <details class="glass"><summary>Как удалить программу?</summary><p>Закройте программу и удалите её файл с рабочего стола и папку «Памятка RMRP» в «Документах». Настройки и скачанные законы — в папке %APPDATA%\PamyatkaRMRP, её тоже можно удалить.</p></details>
-      <details class="glass"><summary>Это была официальная программа RMRP?</summary><p>Нет. Это был фанатский проект, не связанный с администрацией сервера.</p></details>
+      <details class="glass"><summary>Это официальная программа RMRP?</summary><p>Нет. Это фанатский проект, не связанный с администрацией сервера. Законы взяты из открытого раздела форума — если формулировка важна, сверяйтесь с форумом.</p></details>
     </div>
   </section>
 
@@ -310,6 +321,24 @@ footer b { color: var(--dim); font-weight: 600; }
 
 <script>
 "use strict";
+(function () {
+  const e = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  fetch("/auth?step=me", { credentials: "same-origin" }).then(r => r.ok ? r.json() : null).then(u => {
+    if (!u || !u.name) return;
+    const ava = u.avatar && /^[0-9]+$/.test(u.uid)
+      ? `<img class="ava" src="https://cdn.discordapp.com/avatars/${u.uid}/${encodeURIComponent(u.avatar)}.png?size=64" alt="">` : "";
+    document.getElementById("acct").innerHTML = `<a class="who" href="/auth?step=logout" title="Выйти">${ava}<span>${e(u.name)}</span></a>`;
+  }).catch(() => {});
+  fetch("/auth?step=status").then(r => r.json()).then(st => {
+    if (st.price) document.getElementById("price").textContent = st.price;
+  }).catch(() => {});
+  const q = new URLSearchParams(location.search).get("login");
+  if (q) {
+    const t = { ok: "Вы вошли — теперь можно скачать", cancel: "Вход отменён", fail: "Не получилось войти — попробуйте ещё раз" }[q];
+    if (t) { const d = document.createElement("div"); d.className = "toast glass"; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3200); }
+    history.replaceState(null, "", location.pathname + location.hash);
+  }
+})();
 // снимки — крупно по щелчку
 document.querySelectorAll(".gallery img").forEach(img => img.addEventListener("click", () => {
   const b = document.createElement("div");
