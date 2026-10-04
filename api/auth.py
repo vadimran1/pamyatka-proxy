@@ -653,18 +653,97 @@ def settle(tx):
     if currency != "RUB" or amount + 0.01 < want:
         return "too-little", uid, 0
 
-    def credit(cur):
-        cur.execute("INSERT INTO pm_payments (tx, uid, rub, status, at) "
-                    "VALUES (%s, %s, %s, 'CONFIRMED', %s) "
-                    "ON CONFLICT (tx) DO NOTHING RETURNING tx",
-                    (tx, uid, amount, int(time.time())))
-        if not cur.fetchone():
-            return "duplicate", _pg_until(cur, uid)
-        until = _pg_extend(cur, uid, DAYS)
-        cur.execute("UPDATE pm_payments SET until = %s WHERE tx = %s", (until, tx))
-        return "ok", until
-    res, until = pg(credit)
+    res, until = pg(_pg_credit, tx, uid, amount)
     return res, uid, until
+
+
+def _pg_credit(cur, tx, uid, amount):
+    """Засчитать платёж один раз и продлить подписку — одной транзакцией."""
+    cur.execute("INSERT INTO pm_payments (tx, uid, rub, status, at) "
+                "VALUES (%s, %s, %s, 'CONFIRMED', %s) "
+                "ON CONFLICT (tx) DO NOTHING RETURNING tx",
+                (tx, uid, amount, int(time.time())))
+    if not cur.fetchone():
+        return "duplicate", _pg_until(cur, uid)
+    until = _pg_extend(cur, uid, DAYS)
+    cur.execute("UPDATE pm_payments SET until = %s WHERE tx = %s", (until, tx))
+    return "ok", until
+
+
+# ---------------------------------------------------------------- ЮMoney ---
+# Запасной способ, пока нет ключей Platega: перевод на кошелёк и
+# HTTP-уведомление о зачислении, подписанное sha1 с секретом.
+WALLET = os.environ.get("YOOMONEY_WALLET", "").strip()
+YM_SECRET = os.environ.get("YOOMONEY_SECRET", "").strip()
+YM_READY = bool(WALLET and YM_SECRET and SUBS == "postgres")
+PROVIDER = "platega" if PAY_READY else ("yoomoney" if YM_READY else "")
+
+
+def ym_valid(f):
+    """Подпись уведомления ЮMoney: sha1 от полей через & с секретом."""
+    raw = "&".join([f.get("notification_type", ""), f.get("operation_id", ""),
+                    f.get("amount", ""), f.get("currency", ""),
+                    f.get("datetime", ""), f.get("sender", ""),
+                    f.get("codepro", ""), YM_SECRET, f.get("label", "")])
+    good = hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(good, (f.get("sha1_hash") or "").lower())
+
+
+def handle_yoomoney(f):
+    """Уведомление ЮMoney: проверяем подпись и сумму, продлеваем один раз."""
+    if not YM_READY or not ym_valid(f):
+        return "bad-signature"
+    if f.get("test_notification") == "true":
+        return "test-ok"               # кнопка «Протестировать» в ЮMoney
+    if f.get("unaccepted") == "true":
+        return "unaccepted"            # деньги ещё не зачислены
+    if f.get("currency") != "643":
+        return "not-rub"
+    m = re.match(r"^pm1:([0-9]{5,25})$", f.get("label") or "")
+    if not m:
+        return "no-label"
+    try:
+        paid = float(f.get("withdraw_amount") or 0)
+        got = float(f.get("amount") or 0)
+    except ValueError:
+        return "bad-amount"
+    # платящий вносит сумму целиком, а на кошелёк приходит за вычетом
+    # комиссии: смотрим, сколько он заплатил, а если этого поля нет —
+    # сколько пришло, с поправкой на комиссию
+    if not (paid >= PRICE or got >= PRICE * 0.95):
+        return "too-little"
+    op = f.get("operation_id") or ""
+    if not re.match(r"^[0-9A-Za-z_.-]{1,64}$", op):
+        return "no-operation"
+    res, _ = pg(_pg_credit, "ym:" + op, m.group(1), paid or got)
+    return res
+
+
+PAY_PAGE = """<!doctype html><html lang="ru"><meta charset="utf-8">
+<title>Памятка RMRP — подписка</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;
+background:#0b0f17;color:#eef2f8;font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+.c{max-width:28rem;padding:2rem 2.2rem;border-radius:1.2rem;text-align:center;
+background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}
+h1{font-size:1.35rem;margin:0 0 .4rem}p{color:rgba(238,242,248,.7);margin:.3rem 0}
+.p{font-size:2.4rem;font-weight:700;margin:.6rem 0}button{font:inherit;border:0;
+border-radius:.8rem;padding:.75rem 1.2rem;margin:.35rem;cursor:pointer;
+color:#fff;background:linear-gradient(135deg,#5b9dff,#7b6bff)}
+button.w{background:rgba(255,255,255,.12)}small{color:rgba(238,242,248,.45)}</style>
+<div class="c"><h1>Подписка на нейросети</h1>
+<p>Gemini и Grok в помощнике Памятки на {days} дней.</p>
+<div class="p">{price} ₽</div>
+<form method="POST" action="https://yoomoney.ru/quickpay/confirm">
+<input type="hidden" name="receiver" value="{wallet}">
+<input type="hidden" name="quickpay-form" value="button">
+<input type="hidden" name="sum" value="{price}">
+<input type="hidden" name="label" value="{label}">
+<input type="hidden" name="successURL" value="{back}">
+<button name="paymentType" value="AC">Оплатить картой</button>
+<button class="w" name="paymentType" value="PC">Кошельком ЮMoney</button>
+</form>
+<p><small>Discord ID: {uid}. После оплаты вернитесь в Памятку —
+подписка включится в течение минуты.</small></p></div></html>"""
 
 
 def _date(ts):
@@ -824,6 +903,20 @@ class handler(BaseHTTPRequestHandler):
             # отметки старых версий и уведомления об оплате просто принимаем:
             # хранилища больше нет, а повторять запрос им незачем
             return self._send(200, {"ok": False, "closed": True})
+        if step == "yoomoney":
+            n = min(int(self.headers.get("Content-Length") or 0), 8192)
+            form = {k: v[0] for k, v in urllib.parse.parse_qs(
+                self.rfile.read(n).decode("utf-8", "replace"),
+                keep_blank_values=True).items()}
+            try:
+                res = handle_yoomoney(form)
+            except Exception as e:
+                print("ЮMoney: ошибка", type(e).__name__, e)
+                # не 200 — ЮMoney пришлёт уведомление ещё раз
+                return self._send(500, {"error": type(e).__name__})
+            print("ЮMoney:", res, form.get("operation_id"), form.get("label"))
+            # на отказ — тоже 200: иначе ЮMoney будет слать повторы без конца
+            return self._send(200, {"result": res})
         if step == "platega":
             # Platega подписывает уведомление нашими же MerchantId и ключом
             mid = self.headers.get("X-MerchantId", "")
@@ -906,9 +999,9 @@ class handler(BaseHTTPRequestHandler):
 
         if step == "status":
             out = {"configured": ready, "stats": bool(STATS),
-                   "pay": PAY_READY, "price": PRICE, "days": DAYS,
+                   "pay": bool(PROVIDER), "price": PRICE, "days": DAYS,
                    "paywall": PAYWALL, "subs": SUBS or False,
-                   "provider": "platega"}
+                   "provider": PROVIDER or False}
             if not out["stats"]:
                 out["storage_vars"] = storage_names()
             return self._send(200, out)
@@ -989,6 +1082,13 @@ class handler(BaseHTTPRequestHandler):
             if not UID_RE.match(uid):
                 return self._html(400, "Не тот адрес",
                                   "Откройте оплату из программы.")
+            if YM_READY and not PAY_READY:       # ключей Platega пока нет
+                page = PAY_PAGE
+                for k, v in (("{days}", DAYS), ("{price}", PRICE),
+                             ("{wallet}", WALLET), ("{label}", "pm1:" + uid),
+                             ("{back}", BASE + "/auth?step=paid"), ("{uid}", uid)):
+                    page = page.replace(k, str(v))
+                return self._send(200, page, "text/html; charset=utf-8")
             if not PAY_READY:
                 return self._html(503, "Оплата ещё не подключена",
                                   "Автор пока не подключил приём оплаты.")
