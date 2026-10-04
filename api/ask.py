@@ -280,8 +280,8 @@ def _rq(*cmds):
 # Платный доступ к нейросетям. Пока PAMYATKA_PAYWALL не включён,
 # отвечаем всем, как раньше: иначе люди остались бы без помощника
 # раньше, чем появится возможность заплатить.
-# Проект закрыт: нейросети не отвечают. Открыть — PAMYATKA_CLOSED=0.
-_CLOSED = os.environ.get("PAMYATKA_CLOSED", "1").strip() not in ("0", "no", "false")
+# Закрыть проект (нейросети не отвечают): PAMYATKA_CLOSED=1.
+_CLOSED = os.environ.get("PAMYATKA_CLOSED", "0").strip() in ("1", "yes", "true")
 _PAYWALL = os.environ.get("PAMYATKA_PAYWALL", "").strip().lower() in (
     "1", "on", "yes", "true")
 _PRICE = int(os.environ.get("PAMYATKA_PRICE", "50") or 50)

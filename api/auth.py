@@ -49,9 +49,9 @@ STATE_TTL = 600                        # на сам вход — десять �
 VIP = {x.strip() for x in os.environ.get("PAMYATKA_VIP_IDS", "").split(",")
        if x.strip()}
 UA = "PamyatkaAuth/1.0 (+https://pamyatka-proxy.vercel.app)"
-# Проект закрыт: вход, скачивание и оплата выключены. Открыть обратно —
-# PAMYATKA_CLOSED=0 в переменных Vercel.
-CLOSED = os.environ.get("PAMYATKA_CLOSED", "1").strip() not in ("0", "no", "false")
+# Закрыть проект (вход, скачивание, оплата — страница «Проект закрыт»):
+# PAMYATKA_CLOSED=1 в переменных Vercel.
+CLOSED = os.environ.get("PAMYATKA_CLOSED", "0").strip() in ("1", "yes", "true")
 CLOSED_TITLE = "Проект закрыт"
 CLOSED_TEXT = ("Памятка RMRP больше не развивается: вход, скачивание, "
                "подписка и нейросети отключены. Спасибо всем, кто пользовался!")
