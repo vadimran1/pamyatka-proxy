@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
 """Форум предложений Памятки RMRP.
 
-Предложения, голоса и комментарии лежат в том же Redis (Upstash), что и
-/auth. Регистрации нет: писать может любой, а от спама защищают лимиты
-по адресу и поле-ловушка для ботов. Модерирует автор — по ключу из
+Где лежат данные:
+  * Postgres (Neon) — основное хранилище, если в Vercel подключена база
+    (переменная …DATABASE_URL). Таблицы создаются сами при первом заходе,
+    и туда же один раз переносится всё, что раньше лежало в Redis.
+  * Redis (Upstash) — запасной вариант, если Postgres не подключён.
+
+Регистрации нет: писать может любой, а от спама защищают лимиты по
+адресу и поле-ловушка для ботов. Модерирует автор — по ключу из
 переменной Vercel PAMYATKA_FORUM_KEY (без неё модерация выключена).
 
-Как хранится (все ключи с приставкой fs:):
+Как хранится в Redis (все ключи с приставкой fs:):
   fs:seq            счётчик номеров
   fs:p:<id>         предложение целиком, JSON
   fs:new            ZSET: номер -> время, по нему же список
@@ -19,7 +24,7 @@
 бесплатного тарифа Upstash хватает надолго.
 
 Адреса (все через /forum):
-  GET  ?step=status                 подключено ли хранилище
+  GET  ?step=status                 подключено ли хранилище и какое
   GET  ?step=list                   предложения (новые сверху, до 300)
   GET  ?step=comments&id=N          комментарии к предложению
   POST ?step=add      {name, text, hp}
@@ -182,7 +187,7 @@ def voter_of(ip):
                     hashlib.sha256).hexdigest()[:24]
 
 
-def over_limit(kind, voter):
+def r_over_limit(kind, voter):
     """True, если с этого адреса уже слишком часто."""
     cmds = []
     for n, win in LIMITS[kind]:
@@ -207,7 +212,7 @@ def public(p, votes, ccount, mine):
 
 
 # ---------------------------------------------------------------- действия ---
-def list_posts(voter):
+def r_list_posts(voter):
     ids = redis(["ZREVRANGE", "fs:new", 0, LIST_MAX - 1])[0] or []
     if not ids:
         return []
@@ -228,7 +233,7 @@ def list_posts(voter):
     return out
 
 
-def add_post(name, text, voter):
+def r_add_post(name, text, voter):
     pid = str(redis(["INCR", "fs:seq"])[0])
     now = int(time.time())
     p = {"id": pid, "name": name, "text": text, "ts": now, "status": "",
@@ -241,7 +246,7 @@ def add_post(name, text, voter):
     return public(p, 1, 0, {pid})
 
 
-def toggle_vote(pid, voter):
+def r_toggle_vote(pid, voter):
     exists, added = redis(["EXISTS", "fs:p:" + pid],
                           ["SADD", "fs:v:" + pid, voter])
     if not exists:
@@ -257,7 +262,7 @@ def toggle_vote(pid, voter):
     return {"id": pid, "voted": False, "votes": max(int(n), 0)}
 
 
-def get_comments(pid):
+def r_get_comments(pid):
     rows = redis(["LRANGE", "fs:c:" + pid, 0, -1])[0] or []
     out = []
     for r in rows:
@@ -271,7 +276,7 @@ def get_comments(pid):
     return out
 
 
-def add_comment(pid, name, text, voter, author=False):
+def r_add_comment(pid, name, text, voter, author=False):
     if not redis(["EXISTS", "fs:p:" + pid])[0]:
         return None
     c = {"cid": secrets.token_hex(5), "name": name, "text": text,
@@ -283,7 +288,7 @@ def add_comment(pid, name, text, voter, author=False):
             "ts": c["ts"], "author": author}
 
 
-def admin_action(pid, action, value, cid):
+def r_admin_action(pid, action, value, cid):
     if action == "delete":
         voters = redis(["SMEMBERS", "fs:v:" + pid])[0] or []
         cmds = [["DEL", "fs:p:" + pid, "fs:v:" + pid, "fs:c:" + pid],
@@ -323,6 +328,305 @@ def admin_action(pid, action, value, cid):
     return out                         # пусть сайт оставит то, что было
 
 
+# ============================================================ Postgres ===
+# Основное хранилище — Postgres (Neon). Подключение Vercel кладёт адрес в
+# DATABASE_URL (бывает с приставкой, как у Redis: STORAGE_DATABASE_URL),
+# поэтому ищем по окончанию имени. Нет Postgres — работаем на Redis, как
+# раньше.
+def _find_pg():
+    env = os.environ
+    for end in ("DATABASE_URL", "POSTGRES_URL"):
+        for name in sorted(env):
+            if name.endswith(end) and env[name].startswith(("postgres://", "postgresql://")):
+                return env[name]
+    return ""
+
+
+PG_URL = _find_pg()
+BACKEND = "postgres" if PG_URL else ("redis" if STORE else "")
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS forum_posts (
+    id        bigserial PRIMARY KEY,
+    name      text   NOT NULL DEFAULT '',
+    text      text   NOT NULL,
+    ts        bigint NOT NULL,
+    status    text   NOT NULL DEFAULT '',
+    reply     text   NOT NULL DEFAULT '',
+    reply_ts  bigint NOT NULL DEFAULT 0,
+    who       text   NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS forum_posts_ts ON forum_posts (ts DESC);
+CREATE TABLE IF NOT EXISTS forum_votes (
+    post_id   bigint NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+    voter     text   NOT NULL,
+    PRIMARY KEY (post_id, voter)
+);
+CREATE INDEX IF NOT EXISTS forum_votes_voter ON forum_votes (voter);
+CREATE TABLE IF NOT EXISTS forum_comments (
+    n         bigserial PRIMARY KEY,
+    cid       text   NOT NULL UNIQUE,
+    post_id   bigint NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+    name      text   NOT NULL DEFAULT '',
+    text      text   NOT NULL,
+    ts        bigint NOT NULL,
+    who       text   NOT NULL DEFAULT '',
+    author    boolean NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS forum_comments_post ON forum_comments (post_id, n);
+CREATE TABLE IF NOT EXISTS forum_rate (
+    k         text   PRIMARY KEY,
+    n         int    NOT NULL,
+    reset_at  bigint NOT NULL
+);
+CREATE TABLE IF NOT EXISTS forum_meta (
+    key       text   PRIMARY KEY,
+    value     text   NOT NULL DEFAULT ''
+);
+"""
+
+_pg = {"conn": None, "ready": False}
+
+
+def _pg_conn():
+    import psycopg2                    # только когда Postgres и правда есть
+    c = _pg["conn"]
+    if c is None or c.closed:
+        c = psycopg2.connect(PG_URL, connect_timeout=10,
+                             application_name="pamyatka-forum")
+        _pg["conn"] = c
+    return c
+
+
+def _pg_drop():
+    c, _pg["conn"] = _pg["conn"], None
+    try:
+        if c is not None:
+            c.close()
+    except Exception:
+        pass
+
+
+def pg_run(fn, *args):
+    """Выполнить fn(cur, *args) в одной транзакции.
+
+    Neon усыпляет базу, когда к ней не ходят, и старое соединение
+    тёплого экземпляра может оказаться мёртвым — тогда один раз
+    переподключаемся. При первом заходе создаём таблицы и переносим
+    то, что успели написать в Redis.
+    """
+    import psycopg2
+    for attempt in (0, 1):
+        try:
+            c = _pg_conn()
+            first = not _pg["ready"]
+            with c:                            # commit, а при ошибке rollback
+                with c.cursor() as cur:
+                    # таймаут — внутри транзакции: пулер Neon не принимает
+                    # его в параметрах подключения
+                    cur.execute("SET LOCAL statement_timeout = 8000")
+                    if first:
+                        _pg_setup(cur)
+                    res = fn(cur, *args)
+            if first:
+                _pg["ready"] = True
+            return res
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            _pg_drop()
+            if attempt:
+                raise
+
+
+def _pg_setup(cur):
+    # два холодных экземпляра не должны создавать таблицы наперегонки
+    cur.execute("SELECT pg_advisory_xact_lock(712094)")
+    cur.execute(SCHEMA)
+    cur.execute("INSERT INTO forum_meta (key, value) VALUES ('migrated', %s) "
+                "ON CONFLICT (key) DO NOTHING", (str(int(time.time())),))
+    if cur.rowcount and STORE:
+        n = _pg_migrate(cur)
+        cur.execute("UPDATE forum_meta SET value = %s WHERE key = 'migrated'",
+                    ("%d from redis at %d" % (n, int(time.time())),))
+        print("форум: перенесено из Redis предложений:", n)
+
+
+def _pg_migrate(cur):
+    """Разовый перенос из Redis. Redis при этом не трогаем — пусть
+    остаётся копией на всякий случай."""
+    ids = redis(["ZRANGE", "fs:new", 0, -1])[0] or []
+    if not ids:
+        return 0
+    raw = redis(["MGET"] + ["fs:p:" + i for i in ids])[0] or []
+    extra = redis(*([["SMEMBERS", "fs:v:" + i] for i in ids] +
+                    [["LRANGE", "fs:c:" + i, 0, -1] for i in ids]))
+    voters, comments = extra[:len(ids)], extra[len(ids):]
+    moved = 0
+    for i, r, vs, cs in zip(ids, raw, voters, comments):
+        if not r:
+            continue
+        try:
+            p = json.loads(r)
+        except ValueError:
+            continue
+        cur.execute("INSERT INTO forum_posts (id, name, text, ts, status, reply,"
+                    " reply_ts, who) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"
+                    " ON CONFLICT (id) DO NOTHING",
+                    (int(i), p.get("name") or "", p.get("text") or "",
+                     int(p.get("ts") or 0), p.get("status") or "",
+                     p.get("reply") or "", int(p.get("reply_ts") or 0),
+                     p.get("who") or ""))
+        for v in vs or []:
+            cur.execute("INSERT INTO forum_votes (post_id, voter) VALUES (%s,%s)"
+                        " ON CONFLICT DO NOTHING", (int(i), v))
+        for row in cs or []:
+            try:
+                cm = json.loads(row)
+            except ValueError:
+                continue
+            cur.execute("INSERT INTO forum_comments (cid, post_id, name, text, ts,"
+                        " who, author) VALUES (%s,%s,%s,%s,%s,%s,%s)"
+                        " ON CONFLICT (cid) DO NOTHING",
+                        (cm.get("cid") or secrets.token_hex(5), int(i),
+                         cm.get("name") or "", cm.get("text") or "",
+                         int(cm.get("ts") or 0), cm.get("who") or "",
+                         bool(cm.get("author"))))
+        moved += 1
+    # следующий номер — после самого большого перенесённого
+    cur.execute("SELECT COALESCE(MAX(id), 0) FROM forum_posts")
+    top = cur.fetchone()[0]
+    cur.execute("SELECT setval(pg_get_serial_sequence('forum_posts', 'id'), %s, %s)",
+                (max(top, 1), top > 0))
+    return moved
+
+
+POST_COLS = ("SELECT p.id, p.name, p.text, p.ts, p.status, p.reply, p.reply_ts,"
+             " (SELECT count(*) FROM forum_votes v WHERE v.post_id = p.id),"
+             " (SELECT count(*) FROM forum_comments c WHERE c.post_id = p.id),"
+             " EXISTS (SELECT 1 FROM forum_votes m WHERE m.post_id = p.id"
+             " AND m.voter = %s) FROM forum_posts p")
+
+
+def _pg_public(row):
+    pid, name, text, ts, status, reply, reply_ts, votes, cc, voted = row
+    return {"id": str(pid), "name": name or "Аноним", "text": text, "ts": ts,
+            "status": status, "status_text": STATUSES.get(status, ""),
+            "reply": reply, "reply_ts": reply_ts, "votes": int(votes),
+            "comments": int(cc), "voted": bool(voted)}
+
+
+def pg_over_limit(cur, kind, voter):
+    now, hit = int(time.time()), False
+    for n, win in LIMITS[kind]:
+        cur.execute(
+            "INSERT INTO forum_rate (k, n, reset_at) VALUES (%s, 1, %s)"
+            " ON CONFLICT (k) DO UPDATE SET"
+            " n = CASE WHEN forum_rate.reset_at <= %s THEN 1 ELSE forum_rate.n + 1 END,"
+            " reset_at = CASE WHEN forum_rate.reset_at <= %s"
+            "   THEN EXCLUDED.reset_at ELSE forum_rate.reset_at END"
+            " RETURNING n", ("%s:%d:%s" % (kind, win, voter), now + win, now, now))
+        hit = hit or cur.fetchone()[0] > n
+    if secrets.randbelow(50) == 0:     # изредка подметаем истёкшие счётчики
+        cur.execute("DELETE FROM forum_rate WHERE reset_at < %s", (now,))
+    return hit
+
+
+def pg_list_posts(cur, voter):
+    cur.execute(POST_COLS + " ORDER BY p.ts DESC, p.id DESC LIMIT %s",
+                (voter, LIST_MAX))
+    return [_pg_public(r) for r in cur.fetchall()]
+
+
+def pg_add_post(cur, name, text, voter):
+    cur.execute("INSERT INTO forum_posts (name, text, ts, who) VALUES (%s,%s,%s,%s)"
+                " RETURNING id", (name, text, int(time.time()), voter))
+    pid = cur.fetchone()[0]
+    # автор сразу «голосует» за своё предложение
+    cur.execute("INSERT INTO forum_votes (post_id, voter) VALUES (%s,%s)", (pid, voter))
+    cur.execute(POST_COLS + " WHERE p.id = %s", (voter, pid))
+    return _pg_public(cur.fetchone())
+
+
+def pg_toggle_vote(cur, pid, voter):
+    cur.execute("DELETE FROM forum_votes WHERE post_id = %s AND voter = %s",
+                (int(pid), voter))
+    voted = not cur.rowcount
+    if voted:
+        cur.execute("INSERT INTO forum_votes (post_id, voter)"
+                    " SELECT id, %s FROM forum_posts WHERE id = %s"
+                    " ON CONFLICT DO NOTHING", (voter, int(pid)))
+        if not cur.rowcount:
+            cur.execute("SELECT 1 FROM forum_posts WHERE id = %s", (int(pid),))
+            if not cur.fetchone():
+                return None
+    cur.execute("SELECT count(*) FROM forum_votes WHERE post_id = %s", (int(pid),))
+    return {"id": pid, "voted": voted, "votes": int(cur.fetchone()[0])}
+
+
+def pg_get_comments(cur, pid):
+    cur.execute("SELECT cid, name, text, ts, author FROM forum_comments"
+                " WHERE post_id = %s ORDER BY n", (int(pid),))
+    return [{"cid": cid, "name": name or "Аноним", "text": text, "ts": ts,
+             "author": bool(author)} for cid, name, text, ts, author in cur.fetchall()]
+
+
+def pg_add_comment(cur, pid, name, text, voter, author=False):
+    cid, now = secrets.token_hex(5), int(time.time())
+    cur.execute("INSERT INTO forum_comments (cid, post_id, name, text, ts, who, author)"
+                " SELECT %s, id, %s, %s, %s, %s, %s FROM forum_posts WHERE id = %s",
+                (cid, name, text, now, voter, author, int(pid)))
+    if not cur.rowcount:
+        return None
+    # под одним предложением храним не больше COMMENTS_MAX последних
+    cur.execute("DELETE FROM forum_comments WHERE n IN (SELECT n FROM forum_comments"
+                " WHERE post_id = %s ORDER BY n DESC OFFSET %s)", (int(pid), COMMENTS_MAX))
+    return {"cid": cid, "name": name or "Аноним", "text": text, "ts": now,
+            "author": author}
+
+
+def pg_admin_action(cur, pid, action, value, cid):
+    if action == "delete":                     # голоса и комментарии уйдут каскадом
+        cur.execute("DELETE FROM forum_posts WHERE id = %s", (int(pid),))
+        return {"id": pid, "deleted": True} if cur.rowcount else None
+    if action == "delcomment":
+        cur.execute("DELETE FROM forum_comments WHERE post_id = %s AND cid = %s",
+                    (int(pid), cid))
+        return {"id": pid, "cid": cid, "deleted": True} if cur.rowcount else None
+    if action == "status":
+        if value not in STATUSES:
+            raise ValueError("нет такого статуса")
+        cur.execute("UPDATE forum_posts SET status = %s WHERE id = %s", (value, int(pid)))
+    elif action == "reply":
+        reply = clean(value, 1000)
+        cur.execute("UPDATE forum_posts SET reply = %s, reply_ts = %s WHERE id = %s",
+                    (reply, int(time.time()) if reply else 0, int(pid)))
+    else:
+        raise ValueError("нет такого действия")
+    if not cur.rowcount:
+        return None
+    cur.execute(POST_COLS + " WHERE p.id = %s", ("", int(pid)))
+    out = _pg_public(cur.fetchone())
+    del out["voted"]
+    return out
+
+
+# ------------------------------------------------- куда идёт каждое действие ---
+def _pick(pg_fn, redis_fn):
+    def run(*args):
+        if BACKEND == "postgres":
+            return pg_run(pg_fn, *args)
+        return redis_fn(*args)
+    return run
+
+
+over_limit = _pick(pg_over_limit, r_over_limit)
+list_posts = _pick(pg_list_posts, r_list_posts)
+add_post = _pick(pg_add_post, r_add_post)
+toggle_vote = _pick(pg_toggle_vote, r_toggle_vote)
+get_comments = _pick(pg_get_comments, r_get_comments)
+add_comment = _pick(pg_add_comment, r_add_comment)
+admin_action = _pick(pg_admin_action, r_admin_action)
+
+
 # ---------------------------------------------------------------- сервер ---
 class handler(BaseHTTPRequestHandler):
     def _send(self, code, body):
@@ -353,12 +657,13 @@ class handler(BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         step = (q.get("step") or [""])[0]
         if step == "status":
-            return self._send(200, {"ok": True, "store": STORE,
+            return self._send(200, {"ok": True, "store": bool(BACKEND),
+                                    "backend": BACKEND,
                                     "moderation": len(FORUM_KEY) >= 8})
         if step == "admin":
             return self._send(200 if self._is_admin() else 403,
                               {"admin": self._is_admin()})
-        if not STORE:
+        if not BACKEND:
             return self._send(503, {"error": "Форум скоро откроется.",
                                     "store": False})
         try:
@@ -379,7 +684,7 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         step = (q.get("step") or [""])[0]
-        if not STORE:
+        if not BACKEND:
             return self._send(503, {"error": "Форум скоро откроется.",
                                     "store": False})
         try:

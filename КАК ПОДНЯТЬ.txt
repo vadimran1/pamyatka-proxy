@@ -104,17 +104,23 @@ PAMYATKA_PROVIDER на gemini или deepseek и нажать Redeploy.
 
 ФОРУМ ПРЕДЛОЖЕНИЙ (/forum)
 ==========================
-Раздел «Предложения» на сайте. Хранит всё в том же Redis (Upstash),
-что и статистика, — отдельный сервис не нужен.
+Раздел «Предложения» на сайте. Данные лежат в Postgres (Neon), который
+подключён в Vercel -> Storage. Таблицы forum_* создаются сами при первом
+заходе, туда же один раз переносится всё, что раньше было в Redis.
+Если Postgres отключить, форум сам вернётся на Redis (Upstash).
 
-Включить:
-  1. Vercel -> Storage: должно быть подключено Upstash for Redis.
-     Проверка: https://pamyatka-proxy.vercel.app/forum?step=status
-     -> "store": true. Если false — подключите хранилище и Redeploy.
-  2. Settings -> Environment Variables:
-        PAMYATKA_FORUM_KEY   ключ модератора, от 8 символов,
-                             придумайте сами и никому не давайте
-     Redeploy.
+Проверка: https://pamyatka-proxy.vercel.app/forum?step=status
+    "backend": "postgres"  — работает на Neon
+    "backend": "redis"     — Postgres не виден: проверьте, что база
+                             подключена к проекту, и сделайте Redeploy
+
+Модерация — переменная в Settings -> Environment Variables:
+    PAMYATKA_FORUM_KEY   ключ модератора, от 8 символов,
+                         придумайте сами и никому не давайте
+Redeploy.
+
+Регион функций — Франкфурт (fra1 в vercel.json), рядом с базой Neon.
+Если создадите базу в другом регионе — поменяйте и там.
 
 Модерировать:
   Откройте сайт с #admin на конце:
