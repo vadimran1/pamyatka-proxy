@@ -388,11 +388,47 @@ def _may_ask(uid):
     return False
 
 
+def _count_question_pg(d, provider):
+    """Вопрос в статистику — в Postgres, рядом с остальной статистикой."""
+    import psycopg2
+    for attempt in (0, 1):
+        try:
+            c = _PG["c"]
+            if c is None or c.closed:
+                c = _PG["c"] = psycopg2.connect(
+                    _PG_URL, connect_timeout=10, application_name="pamyatka-ask")
+            with c:
+                with c.cursor() as cur:
+                    cur.execute("SET LOCAL statement_timeout = 5000")
+                    cur.execute("CREATE TABLE IF NOT EXISTS pm_count ("
+                                "day TEXT NOT NULL, name TEXT NOT NULL, "
+                                "n INTEGER NOT NULL, PRIMARY KEY (day, name))")
+                    for name in ("q", "q:" + provider):
+                        cur.execute("INSERT INTO pm_count (day, name, n) "
+                                    "VALUES (%s, %s, 1) ON CONFLICT (day, name) "
+                                    "DO UPDATE SET n = pm_count.n + 1", (d, name))
+            return
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            old, _PG["c"] = _PG["c"], None
+            try:
+                old.close()
+            except Exception:
+                pass
+            if attempt:
+                raise
+
+
 def _count_question(provider):
     """Вопрос в статистику автора. Нет хранилища — молча пропускаем."""
+    d = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 3 * 3600))
+    if _PG_URL:
+        try:
+            _count_question_pg(d, provider)
+        except Exception as e:
+            print("статистика:", type(e).__name__)
+        return
     if not ((_R_URL and _R_TOKEN) or _R_TCP):
         return
-    d = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 3 * 3600))
     keep = 400 * 24 * 3600
     cmds = [["INCR", "q:d:" + d], ["EXPIRE", "q:d:" + d, keep],
             ["HINCRBY", "qnet:d:" + d, provider, 1],

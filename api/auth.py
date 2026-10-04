@@ -205,6 +205,21 @@ PG_SCHEMA = (
     """CREATE TABLE IF NOT EXISTS pm_payments (
         tx TEXT PRIMARY KEY, uid TEXT NOT NULL, rub NUMERIC NOT NULL,
         status TEXT NOT NULL, at BIGINT NOT NULL, until BIGINT)""",
+    # статистика: кто запускал в какой день, установки, аккаунты, счётчики
+    """CREATE TABLE IF NOT EXISTS pm_seen (
+        day TEXT NOT NULL, iid TEXT NOT NULL, opens INTEGER NOT NULL,
+        PRIMARY KEY (day, iid))""",
+    """CREATE TABLE IF NOT EXISTS pm_inst (
+        iid TEXT PRIMARY KEY, ver TEXT NOT NULL, first TEXT NOT NULL,
+        last TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS pm_acc (
+        uid TEXT PRIMARY KEY, first TEXT NOT NULL, last TEXT NOT NULL,
+        web INTEGER NOT NULL DEFAULT 0, dl INTEGER NOT NULL DEFAULT 0)""",
+    """CREATE TABLE IF NOT EXISTS pm_accday (
+        day TEXT NOT NULL, uid TEXT NOT NULL, PRIMARY KEY (day, uid))""",
+    """CREATE TABLE IF NOT EXISTS pm_count (
+        day TEXT NOT NULL, name TEXT NOT NULL, n INTEGER NOT NULL,
+        PRIMARY KEY (day, name))""",
 )
 _pg = {"conn": None, "ready": False}
 
@@ -242,8 +257,9 @@ def pg(fn, *args):
                 raise
 
 
-# где живут подписки: Postgres, а если его нет — Redis, как раньше
+# где живут подписки и статистика: Postgres, а если его нет — Redis
 SUBS = "postgres" if PG_URL else ("redis" if STORE else "")
+STATS = SUBS
 MSK = 3 * 3600                        # сутки считаем по Москве, а не по UTC
 
 
@@ -266,8 +282,66 @@ def day(offset=0):
                          time.gmtime(time.time() + MSK - offset * 86400))
 
 
+def _iid(install_id):
+    """Номер установки → солёный хэш: одинаковый для одной установки,
+    но обратно не восстановить."""
+    return hashlib.sha256(("pamyatka-iid-v1:" + install_id).encode()).hexdigest()[:24]
+
+
+def _pg_account(cur, uid, d, web=0, dl=0):
+    cur.execute("INSERT INTO pm_acc (uid, first, last, web, dl) "
+                "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (uid) DO UPDATE SET "
+                "last = %s, web = CASE WHEN pm_acc.web > %s THEN pm_acc.web ELSE %s END, "
+                "dl = CASE WHEN pm_acc.dl > %s THEN pm_acc.dl ELSE %s END",
+                (uid, d, d, web, dl, d, web, web, dl, dl))
+    cur.execute("INSERT INTO pm_accday (day, uid) VALUES (%s, %s) "
+                "ON CONFLICT (day, uid) DO NOTHING", (d, uid))
+
+
+def _pg_count(cur, d, name, n=1):
+    cur.execute("INSERT INTO pm_count (day, name, n) VALUES (%s, %s, %s) "
+                "ON CONFLICT (day, name) DO UPDATE SET n = pm_count.n + %s",
+                (d, name, n, n))
+
+
+def note_account(uid, web=False, dl=False):
+    """Аккаунт вошёл / скачал — в статистику. Ошибки глотаем: счётчик
+    не должен мешать ни входу, ни скачиванию."""
+    try:
+        d = day()
+        if STATS == "postgres":
+            def f(cur):
+                _pg_account(cur, uid, d, int(web), int(dl))
+                if dl:
+                    _pg_count(cur, d, "dl")
+            return pg(f)
+        cmds = [["PFADD", "acc:all", uid]]
+        if web:
+            cmds.append(["PFADD", "web:all", uid])
+        if dl:
+            cmds += [["PFADD", "dl:all", uid], ["INCR", "dl:d:" + d],
+                     ["EXPIRE", "dl:d:" + d, KEEP]]
+        redis(*cmds)
+    except Exception as e:
+        print("статистика:", type(e).__name__, e)
+
+
 def record_ping(install_id, ver, uid=None):
     d = day()
+    if STATS == "postgres":
+        h = _iid(install_id)
+
+        def f(cur):
+            cur.execute("INSERT INTO pm_seen (day, iid, opens) VALUES (%s, %s, 1) "
+                        "ON CONFLICT (day, iid) DO UPDATE SET opens = pm_seen.opens + 1",
+                        (d, h))
+            cur.execute("INSERT INTO pm_inst (iid, ver, first, last) "
+                        "VALUES (%s, %s, %s, %s) ON CONFLICT (iid) DO UPDATE SET "
+                        "ver = %s, last = %s", (h, ver, d, d, ver, d))
+            if uid:
+                _pg_account(cur, uid, d)
+            return True
+        return pg(f)
     cmds = [["PFADD", "u:d:" + d, install_id], ["EXPIRE", "u:d:" + d, KEEP],
             ["PFADD", "u:all", install_id],
             ["INCR", "open:d:" + d], ["EXPIRE", "open:d:" + d, KEEP],
@@ -278,7 +352,55 @@ def record_ping(install_id, ver, uid=None):
     return redis(*cmds)
 
 
+def report_pg():
+    days = [day(i) for i in range(30)]
+    d0, d6, d29 = days[0], days[6], days[29]
+
+    def f(cur):
+        cur.execute("SELECT day, COUNT(*), SUM(opens) FROM pm_seen "
+                    "WHERE day >= %s GROUP BY day", (d29,))
+        per = {d: (int(u), int(o or 0)) for d, u, o in cur.fetchall()}
+        cur.execute("SELECT day, n FROM pm_count WHERE name = 'q' AND day >= %s", (d29,))
+        qs = {d: int(n) for d, n in cur.fetchall()}
+        cur.execute("SELECT COUNT(DISTINCT iid) FROM pm_seen WHERE day >= %s", (d6,))
+        week = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(DISTINCT iid) FROM pm_seen WHERE day >= %s", (d29,))
+        month_ = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM pm_inst")
+        total = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*), COALESCE(SUM(web), 0), COALESCE(SUM(dl), 0) FROM pm_acc")
+        acc_all, web_all, dl_all = (int(x) for x in cur.fetchone())
+        cur.execute("SELECT COUNT(*) FROM pm_accday WHERE day = %s", (d0,))
+        acc_today = int(cur.fetchone()[0])
+        # версия — та, с которой установка заходила последней
+        cur.execute("SELECT ver, COUNT(*) FROM pm_inst GROUP BY ver")
+        vers = [{"ver": v, "users": int(n)} for v, n in cur.fetchall()]
+        cur.execute("SELECT name, n FROM pm_count WHERE day = %s", (d0,))
+        cnt = {k: int(n) for k, n in cur.fetchall()}
+        # больше года не храним
+        cur.execute("DELETE FROM pm_seen WHERE day < %s", (day(400),))
+        cur.execute("DELETE FROM pm_accday WHERE day < %s", (day(400),))
+        return per, qs, week, month_, total, acc_all, web_all, dl_all, acc_today, vers, cnt
+    per, qs, week, month_, total, acc_all, web_all, dl_all, acc_today, vers, cnt = pg(f)
+    return {
+        "days": [{"day": d, "users": per.get(d, (0, 0))[0],
+                  "opens": per.get(d, (0, 0))[1], "questions": qs.get(d, 0)}
+                 for d in days],
+        "today": per.get(d0, (0, 0))[0], "week": week, "month": month_,
+        "total": total, "accounts": acc_all, "accounts_today": acc_today,
+        "versions": sorted(vers, key=lambda x: -x["users"]),
+        "questions_today_by_net": {k[2:]: v for k, v in cnt.items()
+                                   if k.startswith("q:")},
+        **subs_report(),
+        "downloaders": dl_all, "downloads_today": cnt.get("dl", 0),
+        "site_logins": web_all,
+        "storage": "postgres",
+    }
+
+
 def report():
+    if STATS == "postgres":
+        return report_pg()
     days = [day(i) for i in range(30)]
     n = len(days)
     cmds = [["PFCOUNT", "u:d:" + d] for d in days]            # по дням
@@ -783,7 +905,7 @@ class handler(BaseHTTPRequestHandler):
                 return self._html(410, CLOSED_TITLE, CLOSED_TEXT)
 
         if step == "status":
-            out = {"configured": ready, "stats": STORE,
+            out = {"configured": ready, "stats": bool(STATS),
                    "pay": PAY_READY, "price": PRICE, "days": DAYS,
                    "paywall": PAYWALL, "subs": SUBS or False,
                    "provider": "platega"}
@@ -801,10 +923,10 @@ class handler(BaseHTTPRequestHandler):
                                         "автор. Ваш Discord ID: %s"
                                         % who.get("uid"),
                                         "uid": who.get("uid")})
-            if not STORE:
+            if not STATS:
                 seen = storage_names()
-                why = ("Хранилище не подключено: Vercel → Storage → Upstash "
-                       "for Redis, затем Redeploy." if not seen else
+                why = ("Хранилище не подключено: Vercel → Storage → Neon "
+                       "(Postgres), затем Redeploy." if not seen else
                        "Хранилище видно, но без REST-доступа. Найдены "
                        "переменные: %s. Нужна пара …KV_REST_API_URL и "
                        "…KV_REST_API_TOKEN (есть у Upstash for Redis)."
@@ -853,12 +975,7 @@ class handler(BaseHTTPRequestHandler):
             if not who:
                 # не вошёл — сначала вход, потом сразу обратно к скачиванию
                 return self._go(BASE + "/auth?step=start&web=1&next=download")
-            try:
-                d = day()
-                redis(["PFADD", "dl:all", who["uid"]], ["INCR", "dl:d:" + d],
-                      ["EXPIRE", "dl:d:" + d, KEEP], ["PFADD", "acc:all", who["uid"]])
-            except Exception:
-                pass                   # счётчик не должен мешать скачиванию
+            note_account(who["uid"], dl=True)   # ошибки внутри глотаются
             return self._go(DOWNLOAD_URL)
 
         if step == "logout":
@@ -956,11 +1073,7 @@ class handler(BaseHTTPRequestHandler):
                 prof = profile_from_code(g("code"))
             except Exception:
                 return self._go(BASE + "/?login=fail")
-            try:
-                redis(["PFADD", "acc:all", prof["uid"]],
-                      ["PFADD", "web:all", prof["uid"]])
-            except Exception:
-                pass
+            note_account(prof["uid"], web=True)
             to = (BASE + "/auth?step=download" if st.get("next") == "download"
                   else BASE + "/?login=ok")
             return self._send(302, b"", "text/plain", {
@@ -987,8 +1100,5 @@ class handler(BaseHTTPRequestHandler):
             return self._go(_loopback(port, nonce=nonce,
                                       error="Discord недоступен: %s"
                                       % type(e).__name__))
-        try:
-            redis(["PFADD", "acc:all", prof["uid"]])
-        except Exception:
-            pass                       # статистика не должна мешать входу
+        note_account(prof["uid"])      # статистика не мешает входу
         return self._go(_loopback(port, nonce=nonce, token=sign(prof)))
