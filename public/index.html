@@ -2,9 +2,9 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Памятка RMRP — проект закрыт</title>
+<title>Памятка RMRP — готовимся к возрождению</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Памятка RMRP — справочник по законам RMRP «Криминальная Москва». Проект закрыт: скачивание, вход и нейросети отключены. Спасибо всем, кто пользовался.">
+<meta name="description" content="Памятка RMRP — справочник по законам RMRP «Криминальная Москва». Готовимся к возрождению: предлагайте идеи для новой версии на форуме предложений.">
 <meta name="theme-color" content="#0a0d13">
 <meta name="robots" content="noindex">
 <link rel="icon" href="favicon.png">
@@ -54,6 +54,14 @@ svg.i { width: 1.2em; height: 1.2em; stroke: currentColor; fill: none; stroke-wi
 .badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; font-size: .8rem; font-weight: 650;
   color: var(--red); border: 1px solid rgba(255,139,143,.35); background: rgba(255,107,112,.08); }
 .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+.badge.rise { color: var(--gold); border-color: rgba(255,200,97,.38); background: rgba(255,200,97,.08); }
+.badge.rise::before { background: var(--gold); box-shadow: 0 0 0 0 rgba(255,200,97,.6); animation: ping 2.2s var(--ease) infinite; }
+@keyframes ping { 70% { box-shadow: 0 0 0 9px rgba(255,200,97,0); } 100% { box-shadow: 0 0 0 0 rgba(255,200,97,0); } }
+h1 .glow { background: linear-gradient(100deg, #ffe2a6 0%, var(--gold) 40%, #ff9f6e 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 40px rgba(255,200,97,.18); }
+.cta { display: inline-flex; align-items: center; gap: 8px; margin-top: 26px; padding: 12px 22px; border-radius: 14px; font-weight: 650; color: #1a1205;
+  background: linear-gradient(135deg, #ffd98a, #ffb35c); box-shadow: 0 10px 30px -10px rgba(255,180,90,.55); transition: transform .15s var(--ease), box-shadow .15s; }
+.cta:hover { transform: translateY(-1px); box-shadow: 0 14px 34px -10px rgba(255,180,90,.7); }
 
 .hero { padding: 90px 0 30px; text-align: center; }
 h1 { font-size: clamp(2.3rem, 6vw, 4.2rem); line-height: 1.05; letter-spacing: -.03em; margin: 22px auto 0; font-weight: 750; }
@@ -99,6 +107,80 @@ footer b { color: var(--dim); font-weight: 600; }
 .lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.82); backdrop-filter: blur(8px); display: grid; place-items: center; cursor: zoom-out; padding: 16px; }
 .lightbox img { max-height: 92vh; border-radius: 14px; }
 
+/* ---------------- форум предложений ---------------- */
+.forum { max-width: 820px; margin: 36px auto 0; }
+.compose { border-radius: var(--r); padding: 16px; }
+.compose textarea, .compose input, .cform textarea, .cform input, .admin-bar input, .rform textarea {
+  width: 100%; font: inherit; color: var(--text); background: rgba(0,0,0,.22); border: 1px solid var(--stroke); border-radius: 12px; padding: 12px 14px; outline: none; transition: border-color .15s, background .15s; }
+.compose textarea:focus, .compose input:focus, .cform textarea:focus, .cform input:focus, .admin-bar input:focus, .rform textarea:focus { border-color: rgba(255,200,97,.5); background: rgba(0,0,0,.3); }
+.compose textarea { min-height: 96px; resize: vertical; }
+.compose .row, .cform .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+.compose .row input { flex: 1; min-width: 0; }
+.count { color: var(--faint); font-size: .82rem; white-space: nowrap; }
+.hp { position: absolute !important; left: -9999px !important; width: 1px !important; height: 1px !important; opacity: 0 !important; }
+.btn { font: inherit; font-weight: 650; cursor: pointer; border: 0; border-radius: 12px; padding: 11px 18px; color: #1a1205; background: linear-gradient(135deg, #ffd98a, #ffb35c); white-space: nowrap; transition: filter .15s, transform .15s; }
+.btn:hover { filter: brightness(1.06); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { filter: grayscale(.8) brightness(.7); cursor: default; }
+.btn.ghost { color: var(--text); background: rgba(255,255,255,.07); border: 1px solid var(--stroke); }
+.btn.sm { padding: 7px 12px; font-size: .86rem; border-radius: 10px; }
+.btn.danger { color: var(--red); background: rgba(255,107,112,.08); border: 1px solid rgba(255,139,143,.3); }
+.msg { margin: 10px 2px 0; font-size: .9rem; color: var(--dim); min-height: 1.2em; }
+.msg.err { color: var(--red); } .msg.ok { color: #5ee0a5; }
+.msg:empty { display: none; }
+
+.toolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 22px 0 12px; }
+.tabs { display: inline-flex; padding: 4px; border-radius: 13px; background: rgba(255,255,255,.04); border: 1px solid var(--stroke); }
+.tabs button { font: inherit; font-size: .9rem; color: var(--dim); background: none; border: 0; padding: 7px 14px; border-radius: 9px; cursor: pointer; transition: background .15s, color .15s; }
+.tabs button.on { color: var(--text); background: rgba(255,255,255,.1); }
+.toolbar select { font: inherit; font-size: .9rem; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid var(--stroke); border-radius: 11px; padding: 8px 12px; }
+.toolbar select option { background: #141a24; }
+.total { color: var(--faint); font-size: .86rem; }
+
+.posts { display: grid; gap: 10px; }
+.post { display: flex; gap: 14px; border-radius: 18px; padding: 16px 18px 14px 14px; animation: rise .35s var(--ease) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.vote { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 54px; height: 62px; border-radius: 14px; cursor: pointer;
+  font: inherit; color: var(--dim); background: rgba(255,255,255,.04); border: 1px solid var(--stroke); transition: color .15s, background .15s, border-color .15s, transform .12s; }
+.vote:hover { color: var(--text); border-color: var(--stroke2); }
+.vote:active { transform: scale(.95); }
+.vote b { font-size: 1.05rem; line-height: 1; }
+.vote.on { color: var(--gold); background: rgba(255,200,97,.1); border-color: rgba(255,200,97,.4); }
+.post .body { flex: 1; min-width: 0; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--faint); font-size: .83rem; }
+.meta .who { color: var(--dim); font-weight: 600; }
+.chip { display: inline-flex; padding: 2px 9px; border-radius: 99px; font-size: .76rem; font-weight: 650; border: 1px solid var(--stroke2); color: var(--dim); }
+.chip.st-review { color: #8fb8ff; border-color: rgba(143,184,255,.35); background: rgba(143,184,255,.08); }
+.chip.st-planned { color: var(--gold); border-color: rgba(255,200,97,.38); background: rgba(255,200,97,.08); }
+.chip.st-done { color: #5ee0a5; border-color: rgba(94,224,165,.35); background: rgba(94,224,165,.08); }
+.chip.st-rejected { color: var(--red); border-color: rgba(255,139,143,.3); background: rgba(255,107,112,.07); }
+.post .text { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reply { margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(255,200,97,.06); border-left: 3px solid var(--gold); }
+.reply b { font-size: .82rem; color: var(--gold); }
+.reply p { margin: 3px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dim); font-size: .94rem; }
+.acts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 10px; }
+.link { font: inherit; font-size: .86rem; color: var(--faint); background: none; border: 0; padding: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.link:hover { color: var(--text); }
+.link.red:hover { color: var(--red); }
+.acts select { font: inherit; font-size: .84rem; color: var(--dim); background: rgba(255,255,255,.04); border: 1px solid var(--stroke); border-radius: 9px; padding: 4px 8px; }
+.acts select option { background: #141a24; }
+.comments { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--stroke); display: grid; gap: 10px; }
+.comments[hidden] { display: none; }
+.cm { font-size: .93rem; }
+.cm .meta { font-size: .8rem; }
+.cm p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dim); }
+.cm.author .who { color: var(--gold); }
+.cform textarea, .rform textarea { min-height: 60px; resize: vertical; font-size: .93rem; padding: 10px 12px; }
+.cform .row input { flex: 1; min-width: 0; font-size: .9rem; padding: 9px 12px; }
+.rform { margin-top: 10px; display: grid; gap: 8px; }
+.rform .row { display: flex; gap: 8px; }
+.empty { text-align: center; color: var(--faint); padding: 34px 16px; border-radius: 18px; }
+.more { display: flex; justify-content: center; margin-top: 14px; }
+.admin-bar { display: flex; gap: 8px; align-items: center; margin-top: 12px; padding: 10px 12px; border-radius: 14px; border: 1px dashed rgba(255,200,97,.35); background: rgba(255,200,97,.04); font-size: .9rem; color: var(--dim); }
+.admin-bar input { flex: 1; padding: 8px 12px; }
+.skel { height: 96px; border-radius: 18px; background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.07), rgba(255,255,255,.03)); background-size: 200% 100%; animation: sh 1.4s linear infinite; }
+@keyframes sh { to { background-position: -200% 0; } }
+
 @media (max-width: 860px) {
   .cards { grid-template-columns: 1fr; }
   .stats { grid-template-columns: 1fr 1fr; }
@@ -107,6 +189,11 @@ footer b { color: var(--dim); font-weight: 600; }
   .links { display: none; }
   .gallery { grid-template-columns: 1fr; }
   .hero { padding-top: 60px; }
+  .compose .row { flex-wrap: wrap; }
+  .compose .row input { flex-basis: 100%; }
+  .compose .row .btn { margin-left: auto; }
+  .post { gap: 11px; padding: 14px 14px 12px 11px; }
+  .vote { width: 46px; height: 56px; }
 }
 </style>
 </head>
@@ -119,28 +206,32 @@ footer b { color: var(--dim); font-weight: 600; }
     <symbol id="book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></symbol>
     <symbol id="power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
     <symbol id="heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></symbol>
+    <symbol id="up" viewBox="0 0 24 24"><path d="M6 14l6-6 6 6"/></symbol>
+    <symbol id="chat" viewBox="0 0 24 24"><path d="M20 12a7.5 7.5 0 0 1-11 6.6L4 20l1.4-4.6A7.5 7.5 0 1 1 20 12z"/></symbol>
+    <symbol id="bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></symbol>
   </defs>
 </svg>
 
 <div class="wrap">
   <nav class="nav glass">
     <span class="brand"><span class="logo"><svg class="i"><use href="#scale"/></svg></span>Памятка RMRP</span>
-    <div class="links"><a href="#what">Что дальше</a><a href="#screens">Как это было</a><a href="#faq">Вопросы</a></div>
+    <div class="links"><a href="#forum">Предложения</a><a href="#what">Что сейчас</a><a href="#screens">Как это было</a><a href="#faq">Вопросы</a></div>
   </nav>
 
   <header class="hero">
-    <span class="badge">Проект закрыт</span>
-    <h1>Памятка RMRP <em>закрыта</em></h1>
-    <p class="lead">Справочник по законам RMRP «Криминальная Москва» больше не развивается. Скачивание, вход через Discord, подписка и нейросети отключены, сервер проекта выключен.</p>
-    <p class="thanks">Спасибо всем, кто пользовался, писал отзывы и находил ошибки.</p>
+    <span class="badge rise">Памятка RMRP</span>
+    <h1>Готовимся к <span class="glow">возрождению</span></h1>
+    <p class="lead">Справочник по законам RMRP «Криминальная Москва» был на паузе — теперь мы готовим его возвращение. Скачивание, вход и нейросети пока отключены, а новая версия собирается прямо сейчас.</p>
+    <p class="thanks">Какой должна стать новая Памятка — решаем вместе с вами.</p>
+    <a class="cta" href="#forum"><svg class="i"><use href="#bulb"/></svg>Предложить идею</a>
 
     <div class="cards" id="what">
       <div class="card glass ok"><div class="ic"><svg class="i"><use href="#book"/></svg></div>
         <h3>Уже установили — пользуйтесь</h3>
         <p>Законы, поиск, помощник, памятки и фразы хранятся на вашем компьютере и работают без интернета. При запуске программа покажет, что проект закрыт: нажмите «Пользоваться без сети».</p></div>
       <div class="card glass off"><div class="ic"><svg class="i"><use href="#power"/></svg></div>
-        <h3>Что отключено</h3>
-        <p>Скачивание и установка, вход через Discord, нейросети Gemini и Grok, статистика. Обновлений программы и законов больше не будет.</p></div>
+        <h3>Что пока отключено</h3>
+        <p>Скачивание и установка, вход через Discord, нейросети Gemini и Grok, статистика. Что вернётся в новой версии — смотрите по предложениям ниже.</p></div>
       <div class="card glass"><div class="ic"><svg class="i"><use href="#heart"/></svg></div>
         <h3>Законы меняются</h3>
         <p>В программе остались законы на момент закрытия. Если формулировка важна — сверяйтесь с актуальным разделом на форуме сервера.</p></div>
@@ -165,11 +256,46 @@ footer b { color: var(--dim); font-weight: 600; }
     </div>
   </section>
 
+  <section id="forum">
+    <h2>Предложения</h2>
+    <p class="sub">Чего не хватало в Памятке? Что добавить в новую версию? Пишите без регистрации и голосуйте за чужие идеи — самые нужные поднимаются наверх.</p>
+    <div class="forum">
+      <form class="compose glass" id="compose" novalidate>
+        <textarea id="f-text" maxlength="1000" placeholder="Например: искать статью по номеру голосом, тёмная тема для ночных смен…" aria-label="Ваше предложение"></textarea>
+        <div class="row">
+          <input id="f-name" maxlength="32" placeholder="Ник (необязательно)" aria-label="Ник" autocomplete="nickname">
+          <input id="f-hp" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <span class="count" id="f-count">0 / 1000</span>
+          <button class="btn" id="f-send" type="submit">Предложить</button>
+        </div>
+        <p class="msg" id="f-msg"></p>
+      </form>
+      <div id="admin-slot"></div>
+      <div class="toolbar">
+        <div class="tabs" role="tablist">
+          <button type="button" data-sort="top" class="on" role="tab">Популярные</button>
+          <button type="button" data-sort="new" role="tab">Новые</button>
+        </div>
+        <select id="f-filter" aria-label="Фильтр по статусу">
+          <option value="all">Все статусы</option>
+          <option value="">Без статуса</option>
+          <option value="review">На рассмотрении</option>
+          <option value="planned">В планах</option>
+          <option value="done">Сделано</option>
+          <option value="rejected">Отклонено</option>
+        </select>
+      </div>
+      <div class="posts" id="posts"><div class="skel"></div><div class="skel"></div></div>
+      <div class="more"><button class="btn ghost" id="more" type="button" hidden>Показать ещё</button></div>
+    </div>
+  </section>
+
   <section id="faq">
     <h2>Вопросы</h2>
     <div class="faq">
-      <details class="glass"><summary>Программа у меня перестанет работать?</summary><p>Нет. Всё, что работало без интернета, продолжит работать: законы, поиск, помощник, памятки, избранное, голосовой ввод. Не будет только нейросетей и обновлений.</p></details>
-      <details class="glass"><summary>Где теперь скачать?</summary><p>Нигде — скачивание закрыто вместе с проектом. Если программа уже стоит, переустанавливать ничего не нужно.</p></details>
+      <details class="glass"><summary>Когда Памятка вернётся?</summary><p>Точной даты пока нет — работа идёт. Следите за этой страницей, а идеи пишите в предложениях: по ним будем решать, с чего начать.</p></details>
+      <details class="glass"><summary>Программа у меня перестанет работать?</summary><p>Нет. Всё, что работало без интернета, продолжит работать: законы, поиск, помощник, памятки, избранное, голосовой ввод. Не будет только нейросетей и обновлений до выхода новой версии.</p></details>
+      <details class="glass"><summary>Где сейчас скачать?</summary><p>Пока нигде — скачивание закрыто. Когда Памятка вернётся, ссылка появится на этой странице. Если программа уже стоит, переустанавливать ничего не нужно.</p></details>
       <details class="glass"><summary>Я оплачивал подписку?</summary><p>Платная подписка так и не была включена: оплата не принималась, ни с кого ничего не списывалось.</p></details>
       <details class="glass"><summary>Как удалить программу?</summary><p>Закройте программу и удалите её файл с рабочего стола и папку «Памятка RMRP» в «Документах». Настройки и скачанные законы — в папке %APPDATA%\PamyatkaRMRP, её тоже можно удалить.</p></details>
       <details class="glass"><summary>Это была официальная программа RMRP?</summary><p>Нет. Это был фанатский проект, не связанный с администрацией сервера.</p></details>
@@ -191,6 +317,235 @@ document.querySelectorAll(".gallery img").forEach(img => img.addEventListener("c
   const big = document.createElement("img"); big.src = img.src; big.alt = img.alt;
   b.appendChild(big); b.onclick = () => b.remove(); document.body.appendChild(b);
 }));
+
+// ---------------- форум предложений ----------------
+(() => {
+  const API = "/forum";
+  const PAGE = 20;
+  const $ = id => document.getElementById(id);
+  const store = {               // localStorage может быть недоступен — не страшно
+    get(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+    sget(k) { try { return sessionStorage.getItem(k) || ""; } catch (e) { return ""; } },
+    sset(k, v) { try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch (e) {} },
+  };
+  const state = { posts: [], sort: "top", filter: "all", shown: PAGE, admin: store.sget("pm_fkey"), statuses: {}, open: new Set() };
+
+  // элемент без innerHTML: всё, что пишут люди, попадает только в textContent
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
+    return el;
+  }
+  const icon = id => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("class", "i");
+    const u = document.createElementNS("http://www.w3.org/2000/svg", "use"); u.setAttribute("href", "#" + id); s.append(u); return s; };
+
+  async function api(step, body, extra) {
+    const opt = { method: body ? "POST" : "GET", headers: {} };
+    if (body) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+    if (state.admin) opt.headers["X-Forum-Key"] = state.admin;
+    const r = await fetch(API + "?step=" + step + (extra || ""), opt);
+    let data = {};
+    try { data = await r.json(); } catch (e) {}
+    if (!r.ok) throw Object.assign(new Error(data.error || "Сервер не ответил, попробуйте позже."), { status: r.status, data });
+    return data;
+  }
+
+  function ago(ts) {
+    const s = Math.max(0, Date.now() / 1000 - ts);
+    if (s < 60) return "только что";
+    if (s < 3600) return Math.floor(s / 60) + " мин назад";
+    if (s < 86400) return Math.floor(s / 3600) + " ч назад";
+    if (s < 86400 * 7) { const d = Math.floor(s / 86400); return d + (d === 1 ? " день" : d < 5 ? " дня" : " дней") + " назад"; }
+    return new Date(ts * 1000).toLocaleDateString("ru-RU");
+  }
+  const plural = (n, a, b, c) => { const m10 = n % 10, m100 = n % 100;
+    return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; };
+
+  function say(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
+
+  // ---- список ----
+  function visible() {
+    let list = state.posts.filter(p => state.filter === "all" || p.status === state.filter);
+    list = list.slice().sort(state.sort === "top" ? (a, b) => b.votes - a.votes || b.ts - a.ts : (a, b) => b.ts - a.ts);
+    return list;
+  }
+
+  function render() {
+    const box = $("posts"), list = visible();
+    box.replaceChildren();
+    if (!list.length) {
+      box.append(h("div", { class: "empty glass" }, state.posts.length ? "С таким статусом пока ничего нет." : "Пока ни одного предложения — будьте первым!"));
+    }
+    list.slice(0, state.shown).forEach(p => box.append(card(p)));
+    $("more").hidden = list.length <= state.shown;
+  }
+
+  function card(p) {
+    const voteBtn = h("button", { class: "vote" + (p.voted ? " on" : ""), type: "button", "aria-pressed": p.voted ? "true" : "false",
+      title: p.voted ? "Снять голос" : "Поддержать", onclick: () => vote(p, voteBtn) }, icon("up"), h("b", {}, p.votes));
+    const meta = h("div", { class: "meta" }, h("span", { class: "who" }, p.name), h("time", { datetime: new Date(p.ts * 1000).toISOString() }, ago(p.ts)),
+      p.status ? h("span", { class: "chip st-" + p.status }, p.status_text) : null);
+    const body = h("div", { class: "body" }, meta, h("p", { class: "text" }, p.text));
+    if (p.reply) body.append(h("div", { class: "reply" }, h("b", {}, "Ответ автора"), h("p", {}, p.reply)));
+
+    const cbox = h("div", { class: "comments", hidden: !state.open.has(p.id) });
+    const ctoggle = h("button", { class: "link", type: "button", onclick: () => toggleComments(p, cbox, ctoggle) },
+      icon("chat"), p.comments ? "Комментарии (" + p.comments + ")" : "Обсудить");
+    const acts = h("div", { class: "acts" }, ctoggle);
+    if (state.admin) acts.append(...adminControls(p, body));
+    body.append(acts, cbox);
+    if (state.open.has(p.id)) loadComments(p, cbox);
+    return h("article", { class: "post glass", id: "p" + p.id }, voteBtn, body);
+  }
+
+  async function vote(p, btn) {
+    btn.disabled = true;
+    try {
+      const r = await api("vote", { id: p.id });
+      p.voted = r.voted; p.votes = r.votes;
+      btn.classList.toggle("on", r.voted); btn.setAttribute("aria-pressed", r.voted ? "true" : "false");
+      btn.title = r.voted ? "Снять голос" : "Поддержать"; btn.querySelector("b").textContent = r.votes;
+    } catch (e) { btn.title = e.message; flash(btn); }
+    btn.disabled = false;
+  }
+  const flash = el => { el.animate([{ transform: "translateX(0)" }, { transform: "translateX(-3px)" }, { transform: "translateX(3px)" }, { transform: "translateX(0)" }], { duration: 240 }); };
+
+  // ---- комментарии ----
+  function toggleComments(p, box, btn) {
+    if (state.open.has(p.id)) { state.open.delete(p.id); box.hidden = true; return; }
+    state.open.add(p.id); box.hidden = false; loadComments(p, box);
+  }
+
+  async function loadComments(p, box) {
+    box.replaceChildren(h("div", { class: "meta" }, "Загружаем…"));
+    let list = [];
+    try { list = (await api("comments", null, "&id=" + p.id)).comments; }
+    catch (e) { box.replaceChildren(h("div", { class: "msg err" }, e.message)); return; }
+    box.replaceChildren();
+    list.forEach(c => box.append(comment(p, c, box)));
+    box.append(commentForm(p, box));
+  }
+
+  function comment(p, c, box) {
+    const meta = h("div", { class: "meta" }, h("span", { class: "who" }, c.author ? (c.name || "Автор") + " · автор" : c.name), h("span", {}, ago(c.ts)));
+    if (state.admin) meta.append(h("button", { class: "link red", type: "button", onclick: async () => {
+      try { await api("admin", { id: p.id, action: "delcomment", cid: c.cid }); p.comments = Math.max(0, p.comments - 1); render(); }
+      catch (e) { alert(e.message); } } }, "удалить"));
+    return h("div", { class: "cm" + (c.author ? " author" : "") }, meta, h("p", {}, c.text));
+  }
+
+  function commentForm(p, box) {
+    const ta = h("textarea", { maxlength: 500, placeholder: "Ваш комментарий…", "aria-label": "Комментарий" });
+    const name = h("input", { maxlength: 32, placeholder: "Ник", "aria-label": "Ник", value: store.get("pm_fname") });
+    const hp = h("input", { class: "hp", tabindex: -1, autocomplete: "off", "aria-hidden": "true" });
+    const msg = h("p", { class: "msg" });
+    const send = h("button", { class: "btn sm", type: "submit" }, "Отправить");
+    return h("form", { class: "cform", onsubmit: async ev => {
+      ev.preventDefault();
+      const text = ta.value.trim();
+      if (text.length < 2) { say(msg, "Напишите хоть пару слов.", "err"); return; }
+      send.disabled = true; say(msg, "");
+      try {
+        await api("comment", { id: p.id, name: name.value.trim(), text, hp: hp.value });
+        store.set("pm_fname", name.value.trim());
+        p.comments += 1; state.open.add(p.id); render();
+      } catch (e) { say(msg, e.message, "err"); send.disabled = false; }
+    } }, ta, h("div", { class: "row" }, name, hp, send), msg);
+  }
+
+  // ---- модерация (/#admin) ----
+  function adminControls(p, body) {
+    const sel = h("select", { "aria-label": "Статус", onchange: async () => {
+      try { Object.assign(p, await api("admin", { id: p.id, action: "status", value: sel.value })); render(); }
+      catch (e) { alert(e.message); } } });
+    for (const [k, v] of Object.entries(state.statuses)) sel.append(h("option", { value: k, selected: k === p.status }, v || "Без статуса"));
+    const replyBtn = h("button", { class: "link", type: "button", onclick: () => {
+      if (body.querySelector(".rform")) return;
+      const ta = h("textarea", { maxlength: 1000, placeholder: "Ответ автора (пусто — убрать ответ)" }); ta.value = p.reply || "";
+      const f = h("form", { class: "rform", onsubmit: async ev => { ev.preventDefault();
+        try { Object.assign(p, await api("admin", { id: p.id, action: "reply", value: ta.value })); render(); }
+        catch (e) { alert(e.message); } } },
+        ta, h("div", { class: "row" }, h("button", { class: "btn sm", type: "submit" }, "Сохранить ответ"), h("button", { class: "btn sm ghost", type: "button", onclick: () => f.remove() }, "Отмена")));
+      body.querySelector(".acts").after(f); ta.focus();
+    } }, p.reply ? "Изменить ответ" : "Ответить");
+    let armed = false;
+    const del = h("button", { class: "link red", type: "button", onclick: async () => {
+      if (!armed) { armed = true; del.textContent = "Точно удалить?"; setTimeout(() => { armed = false; del.textContent = "Удалить"; }, 3000); return; }
+      try { await api("admin", { id: p.id, action: "delete" }); state.posts = state.posts.filter(x => x.id !== p.id); render(); }
+      catch (e) { alert(e.message); }
+    } }, "Удалить");
+    return [sel, replyBtn, del];
+  }
+
+  function adminBar() {
+    const slot = $("admin-slot");
+    slot.replaceChildren();
+    if (location.hash !== "#admin" && !state.admin) return;
+    if (state.admin) {
+      slot.append(h("div", { class: "admin-bar" }, "Режим модератора включён.",
+        h("button", { class: "btn sm ghost", type: "button", style: "margin-left:auto", onclick: () => { state.admin = ""; store.sset("pm_fkey", ""); adminBar(); render(); } }, "Выйти")));
+      return;
+    }
+    const key = h("input", { type: "password", placeholder: "Ключ модератора", autocomplete: "current-password" });
+    const msg = h("span", {});
+    slot.append(h("form", { class: "admin-bar", onsubmit: async ev => {
+      ev.preventDefault();
+      state.admin = key.value.trim();
+      try { await api("admin"); store.sset("pm_fkey", state.admin); adminBar(); render(); }
+      catch (e) { state.admin = ""; msg.textContent = "Не тот ключ"; msg.style.color = "var(--red)"; }
+    } }, key, h("button", { class: "btn sm", type: "submit" }, "Войти"), msg));
+  }
+
+  // ---- новое предложение ----
+  const ta = $("f-text"), count = $("f-count"), fmsg = $("f-msg"), send = $("f-send");
+  $("f-name").value = store.get("pm_fname");
+  ta.addEventListener("input", () => { count.textContent = ta.value.length + " / 1000"; });
+  $("compose").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const text = ta.value.trim(), name = $("f-name").value.trim();
+    if (text.length < 10) { say(fmsg, "Опишите идею чуть подробнее — хотя бы 10 символов.", "err"); ta.focus(); return; }
+    send.disabled = true; say(fmsg, "Отправляем…");
+    try {
+      const p = await api("add", { name, text, hp: $("f-hp").value });
+      store.set("pm_fname", name);
+      if (p && p.id) { state.posts.unshift(p); state.sort = "new"; syncTabs(); render(); }
+      ta.value = ""; count.textContent = "0 / 1000";
+      say(fmsg, "Спасибо! Предложение опубликовано.", "ok");
+      const el = $("p" + (p && p.id)); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (e) { say(fmsg, e.message, "err"); }
+    send.disabled = false;
+  });
+
+  // ---- сортировка и фильтр ----
+  const tabs = document.querySelectorAll(".tabs button");
+  const syncTabs = () => tabs.forEach(b => { b.classList.toggle("on", b.dataset.sort === state.sort); b.setAttribute("aria-selected", b.dataset.sort === state.sort); });
+  tabs.forEach(b => b.addEventListener("click", () => { state.sort = b.dataset.sort; state.shown = PAGE; syncTabs(); render(); }));
+  $("f-filter").addEventListener("change", e => { state.filter = e.target.value; state.shown = PAGE; render(); });
+  $("more").addEventListener("click", () => { state.shown += PAGE; render(); });
+  window.addEventListener("hashchange", adminBar);
+
+  // ---- старт ----
+  async function load() {
+    try {
+      const r = await api("list");
+      state.posts = r.posts || []; state.statuses = r.statuses || {};
+      render();
+    } catch (e) {
+      const closed = e.status === 503 || e.status === 404;
+      $("posts").replaceChildren(h("div", { class: "empty glass" }, closed ? "Форум скоро откроется — загляните чуть позже." : e.message));
+      if (closed) { ta.disabled = true; send.disabled = true; $("f-name").disabled = true; ta.placeholder = "Форум скоро откроется"; }
+    }
+  }
+  adminBar();
+  load();
+})();
 </script>
 </body>
 </html>

@@ -1,10 +1,12 @@
 {
   "functions": {
     "api/ask.py": { "maxDuration": 60 },
-    "api/auth.py": { "maxDuration": 20 }
+    "api/auth.py": { "maxDuration": 20 },
+    "api/forum.py": { "maxDuration": 15 }
   },
   "rewrites": [
     { "source": "/ask", "destination": "/api/ask" },
-    { "source": "/auth", "destination": "/api/auth" }
+    { "source": "/auth", "destination": "/api/auth" },
+    { "source": "/forum", "destination": "/api/forum" }
   ]
 }
