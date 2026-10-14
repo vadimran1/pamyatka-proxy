@@ -30,6 +30,11 @@ Discord, Discord возвращает его сюда, а отсюда брау�
   ?step=pay&uid         оплата подписки — уводит на страницу Platega
   ?step=paid&o          возврат после оплаты: проверяем и включаем
   POST ?step=platega    уведомление Platega об оплате (callback)
+  POST ?step=redeem     активировать ключ {code} (Authorization: Bearer)
+  POST ?step=keygen     создать ключи {days, uses, count, note} — автор
+  GET  ?step=keys       список ключей — автор
+  POST ?step=keyrevoke  отозвать ключ {code} — автор
+  GET  ?step=paylog     последние уведомления об оплате — автор
 
 Подписка. Срок подписки, заказы и платежи хранятся в Postgres (Neon),
 там же, где форум. Уведомлению Platega на слово не верим: по номеру
@@ -220,6 +225,20 @@ PG_SCHEMA = (
     """CREATE TABLE IF NOT EXISTS pm_count (
         day TEXT NOT NULL, name TEXT NOT NULL, n INTEGER NOT NULL,
         PRIMARY KEY (day, name))""",
+    # ключи активации и кто их активировал
+    """CREATE TABLE IF NOT EXISTS pm_keys (
+        code TEXT PRIMARY KEY, days INTEGER NOT NULL, max_uses INTEGER NOT NULL,
+        uses INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '',
+        created BIGINT NOT NULL, created_by TEXT NOT NULL DEFAULT '',
+        revoked INTEGER NOT NULL DEFAULT 0)""",
+    """CREATE TABLE IF NOT EXISTS pm_key_uses (
+        code TEXT NOT NULL, uid TEXT NOT NULL, at BIGINT NOT NULL, until BIGINT,
+        PRIMARY KEY (code, uid))""",
+    # журнал уведомлений об оплате
+    """CREATE TABLE IF NOT EXISTS pm_paylog (
+        at BIGINT NOT NULL, kind TEXT NOT NULL, result TEXT NOT NULL,     -- at: миллисекунды
+        op TEXT NOT NULL DEFAULT '', label TEXT NOT NULL DEFAULT '',
+        amount TEXT NOT NULL DEFAULT '')""",
 )
 _pg = {"conn": None, "ready": False}
 
@@ -750,6 +769,133 @@ def _date(ts):
     return time.strftime("%d.%m.%Y", time.gmtime(ts + MSK))
 
 
+# -------------------------------------------------------- ключи активации ---
+KEY_ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"      # без 0/O, 1/I — не перепутать
+KEY_RE = re.compile(r"^PM-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$")
+KEY_FAILS_PER_DAY = 10
+
+
+class KeyFail(Exception):
+    """Ключ не подошёл: сообщение — для человека."""
+
+
+def new_key():
+    raw = "".join(secrets.choice(KEY_ABC) for _ in range(12))
+    return "PM-%s-%s-%s" % (raw[:4], raw[4:8], raw[8:])
+
+
+def norm_key(code):
+    """«pm abcd efgh jkmn», «ABCDEFGHJKMN» — всё сводим к PM-XXXX-XXXX-XXXX."""
+    s = re.sub(r"[^A-Za-z0-9]", "", str(code or "")).upper()
+    if s.startswith("PM") and len(s) == 14:
+        s = s[2:]
+    if len(s) != 12:
+        return ""
+    k = "PM-%s-%s-%s" % (s[:4], s[4:8], s[8:])
+    return k if KEY_RE.match(k) else ""
+
+
+def make_keys(days, uses, count, note, by):
+    now = int(time.time())
+    codes = [new_key() for _ in range(count)]
+
+    def f(cur):
+        for c in codes:
+            cur.execute("INSERT INTO pm_keys (code, days, max_uses, uses, note, created, created_by, revoked) "
+                        "VALUES (%s, %s, %s, 0, %s, %s, %s, 0)", (c, days, uses, note, now, by))
+    pg(f)
+    return codes
+
+
+def list_keys():
+    def f(cur):
+        cur.execute("SELECT code, days, max_uses, uses, note, created, revoked FROM pm_keys "
+                    "ORDER BY created DESC LIMIT 300")
+        return [{"code": c, "days": int(d), "max_uses": int(m), "uses": int(u), "note": n,
+                 "created": int(t), "revoked": bool(r)} for c, d, m, u, n, t, r in cur.fetchall()]
+    return pg(f)
+
+
+def revoke_key(code):
+    def f(cur):
+        cur.execute("UPDATE pm_keys SET revoked = 1 WHERE code = %s RETURNING code", (code,))
+        return bool(cur.fetchone())
+    return pg(f)
+
+
+def redeem_key(uid, raw_code):
+    """Активировать ключ: продлевает подписку. Возвращает (дней, срок)."""
+    d = day()
+
+    def fails(cur):
+        cur.execute("SELECT n FROM pm_count WHERE day = %s AND name = %s", (d, "kf:" + uid))
+        r = cur.fetchone()
+        return int(r[0]) if r else 0
+    if pg(fails) >= KEY_FAILS_PER_DAY:
+        raise KeyFail("Слишком много неверных ключей сегодня — попробуйте завтра.")
+    code = norm_key(raw_code)
+
+    def f(cur):
+        if not code:
+            raise KeyFail("Это не похоже на ключ: он выглядит как PM-XXXX-XXXX-XXXX.")
+        cur.execute("SELECT days, max_uses, uses, revoked FROM pm_keys WHERE code = %s", (code,))
+        row = cur.fetchone()
+        if not row:
+            raise KeyFail("Такого ключа нет — проверьте, что ввели без ошибок.")
+        days, max_uses, uses, revoked = (int(x) for x in row)
+        if revoked:
+            raise KeyFail("Этот ключ отозван.")
+        if uses >= max_uses:
+            raise KeyFail("У этого ключа закончились активации.")
+        now = int(time.time())
+        cur.execute("INSERT INTO pm_key_uses (code, uid, at) VALUES (%s, %s, %s) "
+                    "ON CONFLICT (code, uid) DO NOTHING RETURNING code", (code, uid, now))
+        if not cur.fetchone():
+            raise KeyFail("Вы уже активировали этот ключ.")
+        cur.execute("UPDATE pm_keys SET uses = uses + 1 WHERE code = %s AND uses < max_uses "
+                    "AND revoked = 0 RETURNING uses", (code,))
+        if not cur.fetchone():
+            raise KeyFail("У этого ключа закончились активации.")
+        until = _pg_extend(cur, uid, days)
+        cur.execute("UPDATE pm_key_uses SET until = %s WHERE code = %s AND uid = %s", (until, code, uid))
+        return days, until
+    try:
+        return pg(f)
+    except KeyFail:
+        # неудачу считаем отдельно: транзакция ключа откатилась целиком
+        def bump(cur):
+            _pg_count(cur, d, "kf:" + uid)
+        try:
+            pg(bump)
+        except Exception:
+            pass
+        raise
+
+
+def log_payment(kind, result, op="", label="", amount=""):
+    """Уведомление об оплате — в журнал. Сам журнал не должен ничего ломать."""
+    if SUBS != "postgres":
+        return
+
+    def f(cur):
+        cur.execute("INSERT INTO pm_paylog (at, kind, result, op, label, amount) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (int(time.time() * 1000), kind, str(result)[:60], str(op or "")[:80],
+                     str(label or "")[:80], str(amount or "")[:30]))
+        cur.execute("DELETE FROM pm_paylog WHERE at < %s", (int((time.time() - 180 * 86400) * 1000),))
+    try:
+        pg(f)
+    except Exception as e:
+        print("журнал оплат:", type(e).__name__)
+
+
+def paylog(limit=40):
+    def f(cur):
+        cur.execute("SELECT at, kind, result, op, label, amount FROM pm_paylog ORDER BY at DESC LIMIT %s", (limit,))
+        return [{"at": int(a) // 1000, "kind": k, "result": r, "op": o, "label": l, "amount": m}
+                for a, k, r, o, l, m in cur.fetchall()]
+    return pg(f)
+
+
 # ------------------------------------------------------------- подпись ---
 def _b64(raw):
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
@@ -915,6 +1061,8 @@ class handler(BaseHTTPRequestHandler):
                 # не 200 — ЮMoney пришлёт уведомление ещё раз
                 return self._send(500, {"error": type(e).__name__})
             print("ЮMoney:", res, form.get("operation_id"), form.get("label"))
+            log_payment("yoomoney", res, form.get("operation_id"), form.get("label"),
+                        form.get("withdraw_amount") or form.get("amount"))
             # на отказ — тоже 200: иначе ЮMoney будет слать повторы без конца
             return self._send(200, {"result": res})
         if step == "platega":
@@ -937,7 +1085,42 @@ class handler(BaseHTTPRequestHandler):
                 # не 200 — пусть Platega повторит уведомление позже
                 return self._send(500, {"error": type(e).__name__})
             print("Platega:", res, tx, uid)
+            log_payment("platega", res, tx, uid or "")
             return self._send(200, {"result": res})
+        if step in ("redeem", "keygen", "keyrevoke"):
+            who, _ = _who(self.headers)
+            if not who:
+                return self._send(401, {"error": "Войдите через Discord."})
+            if SUBS != "postgres":
+                return self._send(503, {"error": "Ключи работают только с базой Postgres."})
+            try:
+                n = min(int(self.headers.get("Content-Length") or 0), 4096)
+                body = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+            except Exception:
+                return self._send(400, {"error": "не JSON"})
+            uid = str(who.get("uid") or "")
+            if step == "redeem":
+                try:
+                    days, until = redeem_key(uid, body.get("code"))
+                except KeyFail as e:
+                    return self._send(400, {"error": str(e)})
+                return self._send(200, {"ok": True, "days": days, "until": until})
+            if uid not in ADMINS:
+                return self._send(403, {"error": "только для автора"})
+            if step == "keyrevoke":
+                code = norm_key(body.get("code"))
+                return self._send(200 if code and revoke_key(code) else 404,
+                                  {"ok": bool(code)})
+            try:
+                days, uses = int(body.get("days")), int(body.get("uses"))
+                count = int(body.get("count") or 1)
+            except (TypeError, ValueError):
+                return self._send(400, {"error": "нужны days, uses и count — числа"})
+            if not (1 <= days <= 3650 and 1 <= uses <= 100000 and 1 <= count <= 50):
+                return self._send(400, {"error": "дни 1–3650, активаций 1–100000, ключей за раз 1–50"})
+            note = str(body.get("note") or "")[:80]
+            return self._send(200, {"keys": make_keys(days, uses, count, note, uid),
+                                    "days": days, "uses": uses})
         if step == "grant":
             auth = self.headers.get("Authorization", "")
             who = verify(auth[7:] if auth.startswith("Bearer ") else "")
@@ -1001,7 +1184,7 @@ class handler(BaseHTTPRequestHandler):
             out = {"configured": ready, "stats": bool(STATS),
                    "pay": bool(PROVIDER), "price": PRICE, "days": DAYS,
                    "paywall": PAYWALL, "subs": SUBS or False,
-                   "provider": PROVIDER or False}
+                   "provider": PROVIDER or False, "keys": SUBS == "postgres"}
             if not out["stats"]:
                 out["storage_vars"] = storage_names()
             return self._send(200, out)
@@ -1042,6 +1225,18 @@ class handler(BaseHTTPRequestHandler):
             data["plan"] = "vip" if until > time.time() else "free"
             data["price"], data["paywall"] = PRICE, PAYWALL
             return self._send(200, data)
+
+        if step in ("keys", "paylog"):
+            who, _ = _who(self.headers)
+            if not who or who.get("uid") not in ADMINS:
+                return self._send(403, {"error": "только для автора"})
+            if SUBS != "postgres":
+                return self._send(503, {"error": "нужна база Postgres"})
+            if step == "keys":
+                return self._send(200, {"keys": list_keys()})
+            return self._send(200, {"log": paylog(), "yoomoney": YM_READY,
+                                    "platega": PAY_READY,
+                                    "notify_url": BASE + "/auth?step=" + (PROVIDER or "yoomoney")})
 
         if step in ("subs", "sub"):
             who, _ = _who(self.headers)

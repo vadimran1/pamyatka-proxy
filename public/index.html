@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Памятка RMRP — законы сервера под рукой</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Памятка RMRP — справочник по законам RMRP «Криминальная Москва»: поиск статей, помощник, памятки, плашка поверх игры. Вход через Discord, нейросети по подписке. Предлагайте идеи на форуме.">
+<meta name="description" content="Памятка RMRP — справочник по законам RMRP «Криминальная Москва»: поиск статей по номеру и словам, помощник, памятки по задержанию, голосовая плашка прямо в игре. Нейросети Gemini и Grok — по подписке.">
 <meta name="theme-color" content="#0a0d13">
 <link rel="icon" href="favicon.png">
 <style>
@@ -95,7 +95,9 @@ h2 { font-size: clamp(1.5rem, 3.2vw, 2.2rem); letter-spacing: -.02em; margin: 0;
 .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 36px; }
 .gallery figure { margin: 0; border-radius: 18px; padding: 8px; }
 .gallery figure.wide { grid-column: 1 / -1; }
-.gallery img { border-radius: 12px; cursor: zoom-in; filter: saturate(.85); transition: filter .2s; }
+.gallery img { width: 100%; height: auto; border-radius: 12px; cursor: zoom-in; filter: saturate(.92); transition: filter .2s; }
+.gallery figure.overlay { background: linear-gradient(135deg, rgba(91,157,255,.12), rgba(123,107,255,.06)), rgba(255,255,255,.03); }
+.gallery figure.overlay img { max-width: 720px; margin: 18px auto 6px; box-shadow: 0 18px 40px -18px rgba(0,0,0,.8); }
 .gallery img:hover { filter: none; }
 .gallery figcaption { color: var(--dim); font-size: .88rem; padding: 10px 6px 4px; }
 
@@ -227,10 +229,10 @@ footer b { color: var(--dim); font-weight: 600; }
   </nav>
 
   <header class="hero">
-    <span class="badge rise">Снова работает</span>
-    <h1>Памятка RMRP <span class="glow">вернулась</span></h1>
-    <p class="lead">Справочник по законам RMRP «Криминальная Москва» снова работает: скачивание, вход через Discord и нейросети включены. Найдите статью по номеру или спросите своими словами — и получите статью и наказание за секунду.</p>
-    <p class="thanks">Какой должна стать Памятка дальше — решаем вместе с вами.</p>
+    <span class="badge rise">Версия 5.9</span>
+    <h1>Законы RMRP — <span class="glow">под рукой</span></h1>
+    <p class="lead">Справочник по законам RMRP «Криминальная Москва». Найдите статью по номеру или спросите своими словами — «угнал тачку, сколько дадут» — и получите статью и наказание за секунду. Прямо в игре — голосом.</p>
+    <p class="thanks">Какой должна стать Памятка дальше — решаем вместе с вами на форуме ниже.</p>
     <div class="ctas">
       <a class="cta" href="/auth?step=download"><svg class="i"><use href="#up"/></svg>Скачать для Windows</a>
       <a class="cta ghost" href="#forum"><svg class="i"><use href="#bulb"/></svg>Предложить идею</a>
@@ -239,31 +241,32 @@ footer b { color: var(--dim); font-weight: 600; }
     <div class="cards" id="what">
       <div class="card glass ok"><div class="ic"><svg class="i"><use href="#book"/></svg></div>
         <h3>Бесплатно</h3>
-        <p>Все законы сервера, поиск по номеру и словам, помощник, понимающий сленг, памятки, фразы, голосовой ввод и плашка поверх игры.</p></div>
+        <p>Все законы сервера, поиск по номеру и словам, помощник, понимающий сленг, памятки по задержанию, фразы и плашка поверх игры с голосовым вводом.</p></div>
       <div class="card glass ok"><div class="ic"><svg class="i"><use href="#chat"/></svg></div>
         <h3>Вход через Discord</h3>
-        <p>Памятка работает только после входа — пароль не нужен, программа получает лишь ник, аватар и номер аккаунта. Скачать тоже можно после входа.</p></div>
+        <p>Пароль не нужен: программа получает только ник, аватар и номер аккаунта. Скачать и пользоваться можно после входа, дальше законы работают и без интернета.</p></div>
       <div class="card glass"><div class="ic"><svg class="i"><use href="#heart"/></svg></div>
         <h3>Нейросети — по подписке</h3>
-        <p>Gemini и Grok объясняют статьи простыми словами. Подписка <b id="price">59</b> ₽ на 30 дней, оплата картой, без автосписаний.</p></div>
+        <p>Gemini и Grok объясняют статьи простыми словами. Подписка <b id="price">150</b> ₽ на 30 дней — картой или кошельком ЮMoney, без автосписаний. Есть ключ активации — введите его в «Аккаунте».</p></div>
     </div>
   </header>
 
   <section id="screens">
     <h2>Как выглядит</h2>
-    <p class="sub">Тёмное стекло, шесть цветовых тем, поиск по 1239 статьям и помощник, понимавший разговорный язык.</p>
+    <p class="sub">Тёмное стекло, шесть цветовых тем, поиск по 1239 статьям и помощник, который понимает разговорный язык.</p>
     <div class="stats">
       <div class="stat glass"><b>1239</b><span>статей из законов сервера</span></div>
       <div class="stat glass"><b>31</b><span>кодекс, закон и регламент</span></div>
       <div class="stat glass"><b>&lt; 1 с</b><span>на поиск статьи</span></div>
-      <div class="stat glass"><b>5.5</b><span>последняя версия</span></div>
+      <div class="stat glass"><b>5.9</b><span>последняя версия</span></div>
     </div>
     <div class="gallery">
-      <figure class="glass wide"><img src="img/home.webp" alt="Главный экран Памятки RMRP" width="1200" height="744" loading="lazy"><figcaption>Главный экран</figcaption></figure>
-      <figure class="glass"><img src="img/ask.webp" alt="Помощник отвечает на вопрос" loading="lazy"><figcaption>Помощник: точная статья, потом объяснение</figcaption></figure>
-      <figure class="glass"><img src="img/laws.webp" alt="Статья закона" loading="lazy"><figcaption>Законы с выделенными санкциями</figcaption></figure>
-      <figure class="glass"><img src="img/guide.webp" alt="Памятка по задержанию" loading="lazy"><figcaption>Памятки по задержанию</figcaption></figure>
-      <figure class="glass"><img src="img/settings.webp" alt="Настройки" loading="lazy"><figcaption>Темы, стекло, горячие клавиши</figcaption></figure>
+      <figure class="glass wide"><img src="img/home.webp?v=2" alt="Главный экран Памятки RMRP" width="1200" height="717" loading="lazy"><figcaption>Главный экран</figcaption></figure>
+      <figure class="glass wide overlay"><img src="img/overlay.webp?v=2" alt="Плашка поверх игры с найденной статьёй" width="700" height="100" loading="lazy"><figcaption>Плашка поверх игры: Ctrl+Alt+V — спросите голосом, статья появится сверху экрана, игра не теряет управление</figcaption></figure>
+      <figure class="glass"><img src="img/ask.webp?v=2" alt="Помощник находит статью по вопросу своими словами" width="1200" height="717" loading="lazy"><figcaption>Помощник: спросите своими словами — получите статью и наказание</figcaption></figure>
+      <figure class="glass"><img src="img/laws.webp?v=2" alt="Статья закона" width="1200" height="717" loading="lazy"><figcaption>Законы с выделенными санкциями</figcaption></figure>
+      <figure class="glass"><img src="img/guide.webp?v=2" alt="Памятка по задержанию" width="1200" height="717" loading="lazy"><figcaption>Памятки: сроки и порядок задержания</figcaption></figure>
+      <figure class="glass"><img src="img/settings.webp?v=2" alt="Настройки" width="1200" height="717" loading="lazy"><figcaption>Темы, стекло, масштаб, горячие клавиши</figcaption></figure>
     </div>
   </section>
 
@@ -305,8 +308,9 @@ footer b { color: var(--dim); font-weight: 600; }
     <h2>Вопросы</h2>
     <div class="faq">
       <details class="glass"><summary>Как скачать?</summary><p>Нажмите «Скачать для Windows» и войдите через Discord — установщик скачается сразу после входа. Дальше программа обновляется сама.</p></details>
-      <details class="glass"><summary>У меня программа пишет «Проект закрыт»</summary><p>Перезапустите Памятку — она скачает свежие данные и откроется как обычно. Если не помогло, нажмите «Пользоваться без сети», подождите минуту и перезапустите ещё раз.</p></details>
-      <details class="glass"><summary>Как работает подписка?</summary><p>Подписка нужна только для нейросетей. Оплата разовая, на 30 дней, картой. Автосписаний нет. Подписка включается сама, как только платёж подтвердится, обычно за минуту. Оплатить можно в программе: раздел «Аккаунт».</p></details>
+      <details class="glass"><summary>Как спросить прямо в игре?</summary><p>Запустите GTA 5 в оконном режиме без рамки и нажмите Ctrl+Alt+V: сверху появится плашка, скажите вопрос — статья с наказанием появится там же. Спрятать — Ctrl+Alt+Q. Клавиши меняются в настройках Памятки.</p></details>
+      <details class="glass"><summary>Как работает подписка?</summary><p>Подписка нужна только для нейросетей. Оплата разовая, на 30 дней — картой или кошельком ЮMoney. Автосписаний нет. Подписка включается сама, как только платёж подтвердится, обычно за минуту. Оплатить можно в программе: раздел «Аккаунт».</p></details>
+      <details class="glass"><summary>У меня есть ключ активации</summary><p>Откройте в Памятке раздел «Аккаунт», введите ключ вида PM-XXXX-XXXX-XXXX в поле «Ключ активации» и нажмите «Активировать» — подписка продлится сразу.</p></details>
       <details class="glass"><summary>Работает без интернета?</summary><p>Законы, поиск, помощник и голос — да. Интернет нужен для первого входа, нейросетей и обновлений.</p></details>
       <details class="glass"><summary>Как удалить программу?</summary><p>Закройте программу и удалите её файл с рабочего стола и папку «Памятка RMRP» в «Документах». Настройки и скачанные законы — в папке %APPDATA%\PamyatkaRMRP, её тоже можно удалить.</p></details>
       <details class="glass"><summary>Это официальная программа RMRP?</summary><p>Нет. Это фанатский проект, не связанный с администрацией сервера. Законы взяты из открытого раздела форума — если формулировка важна, сверяйтесь с форумом.</p></details>
@@ -378,7 +382,7 @@ document.querySelectorAll(".gallery img").forEach(img => img.addEventListener("c
   async function api(step, body, extra) {
     const opt = { method: body ? "POST" : "GET", headers: {} };
     if (body) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
-    if (state.admin) opt.headers["X-Forum-Key"] = state.admin;
+    if (state.admin && state.admin !== "discord") opt.headers["X-Forum-Key"] = state.admin;
     const r = await fetch(API + "?step=" + step + (extra || ""), opt);
     let data = {};
     try { data = await r.json(); } catch (e) {}
@@ -517,6 +521,10 @@ document.querySelectorAll(".gallery img").forEach(img => img.addEventListener("c
     const slot = $("admin-slot");
     slot.replaceChildren();
     if (location.hash !== "#admin" && !state.admin) return;
+    if (state.admin === "discord") {
+      slot.append(h("div", { class: "admin-bar" }, "Режим модератора: вы вошли через Discord как автор."));
+      return;
+    }
     if (state.admin) {
       slot.append(h("div", { class: "admin-bar" }, "Режим модератора включён.",
         h("button", { class: "btn sm ghost", type: "button", style: "margin-left:auto", onclick: () => { state.admin = ""; store.sset("pm_fkey", ""); adminBar(); render(); } }, "Выйти")));
@@ -574,6 +582,8 @@ document.querySelectorAll(".gallery img").forEach(img => img.addEventListener("c
   }
   adminBar();
   load();
+  // вошёл на сайте через Discord как автор — модерация включается сама
+  if (!state.admin) api("admin").then(r => { if (r && r.admin) { state.admin = "discord"; adminBar(); render(); } }).catch(() => {});
 })();
 </script>
 </body>

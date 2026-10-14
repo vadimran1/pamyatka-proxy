@@ -8,8 +8,10 @@
   * Redis (Upstash) — запасной вариант, если Postgres не подключён.
 
 Регистрации нет: писать может любой, а от спама защищают лимиты по
-адресу и поле-ловушка для ботов. Модерирует автор — по ключу из
-переменной Vercel PAMYATKA_FORUM_KEY (без неё модерация выключена).
+адресу и поле-ловушка для ботов. Модерирует автор: достаточно войти на
+сайте через Discord с аккаунтом из PAMYATKA_ADMIN_IDS (тот же список,
+что для статистики). Запасной способ — ключ из переменной Vercel
+PAMYATKA_FORUM_KEY, вводится на сайте по адресу /#admin.
 
 Как хранится в Redis (все ключи с приставкой fs:):
   fs:seq            счётчик номеров
@@ -40,6 +42,37 @@ from http.server import BaseHTTPRequestHandler
 
 UA = "PamyatkaForum/1.0 (+https://pamyatka-proxy.vercel.app)"
 FORUM_KEY = os.environ.get("PAMYATKA_FORUM_KEY", "").strip()
+# автор форума — тот же, что у статистики: вход через Discord на сайте
+ADMINS = {x.strip() for x in os.environ.get("PAMYATKA_ADMIN_IDS", "").split(",") if x.strip()}
+_DSEC = os.environ.get("DISCORD_CLIENT_SECRET", "").strip()
+COOKIE = "pm_s"                                   # куки входа сайта (см. auth.py)
+
+
+def _session_uid(headers):
+    """Discord ID из куки входа сайта, если подпись верна и срок не вышел.
+
+    Подпись — та же, что делает auth.py (ключ выводится из секрета Discord).
+    """
+    tok = ""
+    for part in (headers.get("Cookie") or "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == COOKIE:
+            tok = v
+    if not _DSEC or tok.count(".") != 1 or len(tok) > 4096:
+        return ""
+    import base64
+    body, mac = tok.split(".")
+    key = hmac.new(_DSEC.encode("utf-8"), b"pamyatka-session-v1", hashlib.sha256).digest()
+    good = base64.urlsafe_b64encode(hmac.new(key, body.encode("ascii"), hashlib.sha256).digest()).rstrip(b"=")
+    if not hmac.compare_digest(good, mac.encode("ascii")):
+        return ""
+    try:
+        data = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)).decode("utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(data, dict) or data.get("exp", 0) < time.time():
+        return ""
+    return str(data.get("uid") or "")
 SALT = os.environ.get("PAMYATKA_FORUM_SALT", "") or "pamyatka-forum-v1"
 LIST_MAX = 300                     # сколько последних предложений отдаём
 COMMENTS_MAX = 200                 # комментариев под одним предложением
@@ -645,6 +678,8 @@ class handler(BaseHTTPRequestHandler):
             (self.client_address[0] if self.client_address else "?")
 
     def _is_admin(self):
+        if ADMINS and _session_uid(self.headers) in ADMINS:
+            return True                    # вошёл на сайте через Discord как автор
         key = self.headers.get("X-Forum-Key", "")
         return bool(len(FORUM_KEY) >= 8 and key and
                     hmac.compare_digest(key.encode(), FORUM_KEY.encode()))
@@ -659,7 +694,7 @@ class handler(BaseHTTPRequestHandler):
         if step == "status":
             return self._send(200, {"ok": True, "store": bool(BACKEND),
                                     "backend": BACKEND,
-                                    "moderation": len(FORUM_KEY) >= 8})
+                                    "moderation": len(FORUM_KEY) >= 8 or bool(ADMINS and _DSEC)})
         if step == "admin":
             return self._send(200 if self._is_admin() else 403,
                               {"admin": self._is_admin()})
