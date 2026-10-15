@@ -451,12 +451,13 @@ MAX_BODY = 2 * 1024 * 1024
 
 DEFAULTS = {"gemini": "gemini-3.5-flash", "deepseek": "deepseek-chat"}
 
-SYSTEM = """Ты — помощник сотрудника по законодательству игрового проекта RMRP (ролевой сервер по мотивам России). Отвечаешь коротко и по делу.
+SYSTEM = """Ты — помощник сотрудника по законодательству игрового проекта {PROJECT}. Отвечаешь коротко и по делу.
 
 ГЛАВНОЕ ПРАВИЛО
 Это выдуманное игровое законодательство, оно НЕ совпадает с настоящим
-российским правом. Всё, что ты знаешь о реальных законах РФ, здесь
-неприменимо — не подставляй реальные статьи, сроки и суммы.
+правом — ни российским, ни американским, ни каким-либо другим. Всё, что
+ты знаешь о реальных законах, здесь неприменимо — не подставляй
+реальные статьи, сроки и суммы.
 
 ЧТО ТЕБЕ ДАЮТ
 1. КАТАЛОГ — полный список всех статей законки: акт, номер, название
@@ -487,7 +488,8 @@ SYSTEM = """Ты — помощник сотрудника по законода
 
 КАК ОТВЕЧАТЬ
 1. Первая строка — прямой ответ. Если спрашивают про наказание или
-   срок, начни с него: «5 лет лишения свободы» или «штраф 20.000 ₽».
+   срок, начни с него: «5 лет лишения свободы» или «штраф 20.000» —
+   валюта и единицы ровно как в законке.
 2. Дальше одно-два предложения, что именно образует состав.
 3. В конце строка «Источник: УК ст. 47» — акт и номер ровно так, как
    они написаны в КАТАЛОГЕ. Если источников несколько, перечисли их.
@@ -504,6 +506,18 @@ SYSTEM = """Ты — помощник сотрудника по законода
 
 Если спрашивают про порядок действий (как задержать, что зачитать),
 дай нумерованные шаги строго по выдержкам."""
+_PROJECT_DEFAULT = "RMRP (ролевой сервер по мотивам России)"
+_req = _th.local()                     # проект и сервер текущего запроса
+
+
+def _system():
+    """Промт под проект и сервер, который выбрал человек; без него — RMRP."""
+    return SYSTEM.replace("{PROJECT}", getattr(_req, "project", "") or _PROJECT_DEFAULT)
+
+
+def _clean_project(value):
+    s = "".join(ch for ch in str(value or "")[:100] if ch.isprintable())
+    return s.strip()
 
 # Ограничение живёт в памяти экземпляра. На serverless экземпляры
 # приходят и уходят, поэтому это не жёсткий лимит, а смягчение всплесков.
@@ -607,7 +621,7 @@ def _one(question, context, catalog, provider, key, model):
     if provider == "orcarouter":
         data = _post(ORCA_BASE + "/v1/chat/completions",
                      {"model": model,
-                      "messages": [{"role": "system", "content": SYSTEM},
+                      "messages": [{"role": "system", "content": _system()},
                                    {"role": "user", "content": prompt}],
                       "temperature": 0.2, "max_tokens": 700,
                       "stream": False},
@@ -618,7 +632,7 @@ def _one(question, context, catalog, provider, key, model):
         # эндпоинта /v1/responses у него нет
         data = _post(ODIROUTER_BASE + "/v1/chat/completions",
                      {"model": model,
-                      "messages": [{"role": "system", "content": SYSTEM},
+                      "messages": [{"role": "system", "content": _system()},
                                    {"role": "user", "content": prompt}],
                       "temperature": 0.2, "max_tokens": 700,
                       "stream": False},
@@ -627,7 +641,7 @@ def _one(question, context, catalog, provider, key, model):
     if provider == "deepseek":
         data = _post("https://api.deepseek.com/chat/completions",
                      {"model": model,
-                      "messages": [{"role": "system", "content": SYSTEM},
+                      "messages": [{"role": "system", "content": _system()},
                                    {"role": "user", "content": prompt}],
                       "temperature": 0.2, "max_tokens": 700,
                       "stream": False},
@@ -643,7 +657,7 @@ def _one(question, context, catalog, provider, key, model):
         gen["thinkingConfig"] = {"thinkingLevel": "low"}
     elif "2.5-flash" in model:
         gen["thinkingConfig"] = {"thinkingBudget": 0}
-    body = {"systemInstruction": {"parts": [{"text": SYSTEM}]},
+    body = {"systemInstruction": {"parts": [{"text": _system()}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": gen}
     url = ("https://generativelanguage.googleapis.com/v1beta/models/"
@@ -753,6 +767,7 @@ class handler(BaseHTTPRequestHandler):
             return self._send(429, {"error": "слишком часто, подождите"})
 
         question = (payload.get("question") or "").strip()
+        _req.project = _clean_project(payload.get("project"))
         if not question:
             return self._send(400, {"error": "пустой вопрос"})
 
