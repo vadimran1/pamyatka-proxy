@@ -1218,12 +1218,22 @@ class handler(BaseHTTPRequestHandler):
             data, _ = _who(self.headers)
             if not data:
                 return self._send(401, {"error": "пропуск недействителен"})
+            # пропуск продлевается, пока Памяткой пользуются: заново входить
+            # через Discord (а он в РФ без VPN не открывается) не нужно
+            fresh = None
+            if data.get("exp", 0) - time.time() < TTL - 30 * 86400:
+                now = int(time.time())
+                fresh = sign({k: data.get(k) for k in
+                              ("uid", "name", "login", "avatar", "plan")}
+                             | {"iat": now, "exp": now + TTL})
             # план пересчитываем при каждой проверке: оплатил — подписка
             # появилась без нового входа, кончилась — пропала
             until = sub_until(data.get("uid"))
             data["sub_until"] = until
             data["plan"] = "vip" if until > time.time() else "free"
             data["price"], data["paywall"] = PRICE, PAYWALL
+            if fresh:
+                data["token"] = fresh
             return self._send(200, data)
 
         if step in ("keys", "paylog"):
