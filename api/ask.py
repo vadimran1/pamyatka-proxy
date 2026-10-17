@@ -763,7 +763,10 @@ class handler(BaseHTTPRequestHandler):
 
         ip = (self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
               or self.client_address[0])
-        if not _allowed(ip):
+        # лимит — на человека: через ретранслятор (обход блокировок) все
+        # приходят с одного IP, и общий лимит по IP задушил бы всех сразу
+        _me = _session(payload.get("token"))
+        if not _allowed("u:" + str(_me.get("uid")) if _me else ip):
             return self._send(429, {"error": "слишком часто, подождите"})
 
         question = (payload.get("question") or "").strip()
