@@ -7,6 +7,14 @@
 <meta name="description" content="Памятка RMRP — справочник по законам RMRP «Криминальная Москва»: поиск статей по номеру и словам, помощник, памятки по задержанию, голосовая плашка прямо в игре. Нейросети Gemini и Grok — по подписке.">
 <meta name="theme-color" content="#0a0d13">
 <link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Памятка — законы сервера под рукой">
+<meta property="og:description" content="Поиск статей, помощник, памятки и голосовая плашка прямо в игре. RMRP и Majestic RP.">
+<meta property="og:image" content="https://pamyatka-proxy.vercel.app/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 :root {
   --bg: #0a0d13; --acc: #8fa3c4; --acc2: #6f7d99;
@@ -47,6 +55,8 @@ svg.i { width: 1.2em; height: 1.2em; stroke: currentColor; fill: none; stroke-wi
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; }
 .logo { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; color: #fff;
   background: linear-gradient(135deg, var(--acc), var(--acc2)); filter: grayscale(.3); }
+.logo:has(img) { background: none; filter: none; }
+.logo img { width: 100%; height: 100%; display: block; border-radius: inherit; }
 .links { display: flex; gap: 4px; margin-left: auto; }
 .links a { padding: 7px 12px; border-radius: 10px; color: var(--dim); font-size: .92rem; transition: background .15s, color .15s; }
 .links a:hover { background: rgba(255,255,255,.07); color: var(--text); }
@@ -222,7 +232,7 @@ footer b { color: var(--dim); font-weight: 600; }
 
 <div class="wrap">
   <nav class="nav glass">
-    <span class="brand"><span class="logo"><svg class="i"><use href="#scale"/></svg></span>Памятка RMRP</span>
+    <span class="brand"><span class="logo"><img src="img/logo.png" alt=""></span>Памятка RMRP</span>
     <div class="links"><a href="#what">Что умеет</a><a href="#screens">Как выглядит</a><a href="#forum">Предложения</a><a href="#faq">Вопросы</a></div>
     <span id="acct"><a class="btn ghost sm" href="/auth?step=start&web=1&next=home">Войти</a></span>
     <a class="btn sm" href="/auth?step=download">Скачать</a>
