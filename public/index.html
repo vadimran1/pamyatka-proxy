@@ -2,10 +2,10 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Памятка RMRP — законы сервера под рукой</title>
+<title>Памятка — законы RMRP и Majestic RP под рукой</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Памятка RMRP — справочник по законам RMRP «Криминальная Москва»: поиск статей по номеру и словам, помощник, памятки по задержанию, голосовая плашка прямо в игре. Нейросети Gemini и Grok — по подписке.">
-<meta name="theme-color" content="#0a0d13">
+<meta name="description" content="Памятка — справочник по законам RMRP и Majestic RP: поиск статей по номеру и словам, помощник, понимающий сленг, памятки по задержанию и голосовая плашка прямо в игре. Работает без интернета и без VPN.">
+<meta name="theme-color" content="#070b16">
 <link rel="icon" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta property="og:type" content="website">
@@ -17,11 +17,12 @@
 <meta name="twitter:card" content="summary_large_image">
 <style>
 :root {
-  --bg: #0a0d13; --acc: #8fa3c4; --acc2: #6f7d99;
-  --text: #eef2f8; --dim: rgba(232,238,248,.66); --faint: rgba(232,238,248,.42);
-  --stroke: rgba(255,255,255,.10); --stroke2: rgba(255,255,255,.18);
-  --gold: #ffc861; --red: #ff8b8f;
+  --bg: #070b16; --acc: #5b9dff; --acc2: #8a6bff; --acc3: #00b3ff;
+  --text: #eef2f8; --dim: rgba(232,238,248,.68); --faint: rgba(232,238,248,.44);
+  --stroke: rgba(255,255,255,.09); --stroke2: rgba(255,255,255,.17);
+  --gold: #ffc861; --red: #ff8b8f; --green: #5ee0a5;
   --r: 1.25rem; --ease: cubic-bezier(.2,.8,.2,1);
+  --grad: linear-gradient(135deg, var(--acc), var(--acc2));
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -34,127 +35,199 @@ a { color: inherit; text-decoration: none; }
 img { max-width: 100%; display: block; }
 svg.i { width: 1.2em; height: 1.2em; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-/* фон: те же пятна, что были, только приглушённые — свет выключен */
-.aurora { position: fixed; inset: -20%; z-index: 0; pointer-events: none; filter: blur(90px) saturate(60%); opacity: .32; }
-.aurora i { position: absolute; border-radius: 50%; mix-blend-mode: screen; }
-.aurora i:nth-child(1) { width: 55vw; height: 55vw; left: 0; top: 0; background: radial-gradient(circle, #2f4f8f, transparent 65%); animation: d1 40s ease-in-out infinite alternate; }
-.aurora i:nth-child(2) { width: 50vw; height: 50vw; right: 0; top: 35%; background: radial-gradient(circle, #4a3f80, transparent 65%); animation: d2 48s ease-in-out infinite alternate; }
-@keyframes d1 { to { transform: translate(10vw, 8vh) scale(1.1); } }
-@keyframes d2 { to { transform: translate(-10vw, -6vh) scale(.92); } }
+/* ---------- фон: светящиеся пятна как в программе, сетка, шум ---------- */
+.aurora { position: fixed; inset: -10%; z-index: 0; pointer-events: none; filter: blur(80px); opacity: .55; }
+.aurora i { position: absolute; border-radius: 50%; }
+.aurora i:nth-child(1) { width: 46vw; height: 46vw; left: -6vw; top: -8vw; background: radial-gradient(circle, #2f6bff, transparent 66%); animation: d1 38s ease-in-out infinite alternate; }
+.aurora i:nth-child(2) { width: 44vw; height: 44vw; right: -8vw; top: 18vh; background: radial-gradient(circle, #7b4dff, transparent 66%); animation: d2 46s ease-in-out infinite alternate; }
+.aurora i:nth-child(3) { width: 34vw; height: 34vw; left: 30vw; bottom: -14vw; background: radial-gradient(circle, #0091ff, transparent 66%); opacity: .6; animation: d1 52s ease-in-out infinite alternate-reverse; }
+@keyframes d1 { to { transform: translate(8vw, 6vh) scale(1.1); } }
+@keyframes d2 { to { transform: translate(-8vw, -5vh) scale(.92); } }
+.grid { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .35;
+  background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+  background-size: 56px 56px; mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%); }
 @media (prefers-reduced-motion: reduce) { .aurora i { animation: none; } html { scroll-behavior: auto; } }
 
 .glass {
-  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02)), rgba(255,255,255,.035);
-  backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%);
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.02)), rgba(255,255,255,.03);
+  backdrop-filter: blur(22px) saturate(150%); -webkit-backdrop-filter: blur(22px) saturate(150%);
   border: 1px solid var(--stroke);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 16px 40px -16px rgba(0,0,0,.6);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 18px 44px -18px rgba(0,0,0,.65);
 }
-.wrap { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+.wrap { position: relative; z-index: 1; max-width: 1140px; margin: 0 auto; padding: 0 16px; }
 
-.nav { position: sticky; top: 12px; z-index: 10; margin-top: 12px; display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 16px; border-radius: 18px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; }
-.logo { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; color: #fff;
-  background: linear-gradient(135deg, var(--acc), var(--acc2)); filter: grayscale(.3); }
-.logo:has(img) { background: none; filter: none; }
-.logo img { width: 100%; height: 100%; display: block; border-radius: inherit; }
-.links { display: flex; gap: 4px; margin-left: auto; }
+/* ---------- шапка ---------- */
+.nav { position: sticky; top: 12px; z-index: 10; margin-top: 12px; display: flex; align-items: center; gap: 14px; padding: 9px 10px 9px 12px; border-radius: 18px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .01em; }
+.logo { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; overflow: hidden; box-shadow: 0 6px 18px -6px rgba(91,157,255,.7); }
+.logo img { width: 100%; height: 100%; display: block; }
+.links { display: flex; gap: 2px; margin-left: auto; }
 .links a { padding: 7px 12px; border-radius: 10px; color: var(--dim); font-size: .92rem; transition: background .15s, color .15s; }
 .links a:hover { background: rgba(255,255,255,.07); color: var(--text); }
-.badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; font-size: .8rem; font-weight: 650;
-  color: var(--red); border: 1px solid rgba(255,139,143,.35); background: rgba(255,107,112,.08); }
-.badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
-.badge.rise { color: var(--gold); border-color: rgba(255,200,97,.38); background: rgba(255,200,97,.08); }
-.badge.rise::before { background: var(--gold); box-shadow: 0 0 0 0 rgba(255,200,97,.6); animation: ping 2.2s var(--ease) infinite; }
-@keyframes ping { 70% { box-shadow: 0 0 0 9px rgba(255,200,97,0); } 100% { box-shadow: 0 0 0 0 rgba(255,200,97,0); } }
-h1 .glow { background: linear-gradient(100deg, #ffe2a6 0%, var(--gold) 40%, #ff9f6e 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
-  text-shadow: 0 0 40px rgba(255,200,97,.18); }
-.cta { display: inline-flex; align-items: center; gap: 8px; margin-top: 26px; padding: 12px 22px; border-radius: 14px; font-weight: 650; color: #1a1205;
-  background: linear-gradient(135deg, #ffd98a, #ffb35c); box-shadow: 0 10px 30px -10px rgba(255,180,90,.55); transition: transform .15s var(--ease), box-shadow .15s; }
-.ctas { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.cta.ghost { color: var(--text); background: rgba(255,255,255,.07); border: 1px solid var(--stroke); box-shadow: none; }
 .nav .btn { margin-left: 4px; }
 .who { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); font-size: .9rem; padding: 4px 8px; border-radius: 10px; }
 .who:hover { background: rgba(255,255,255,.07); color: var(--text); }
 .ava { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; padding: 12px 18px; border-radius: 99px; }
-.cta:hover { transform: translateY(-1px); box-shadow: 0 14px 34px -10px rgba(255,180,90,.7); }
 
-.hero { padding: 90px 0 30px; text-align: center; }
-h1 { font-size: clamp(2.3rem, 6vw, 4.2rem); line-height: 1.05; letter-spacing: -.03em; margin: 22px auto 0; font-weight: 750; }
-h1 em { font-style: normal; color: var(--faint); }
-.lead { font-size: clamp(1.02rem, 1.6vw, 1.2rem); color: var(--dim); max-width: 42rem; margin: 20px auto 0; }
-.thanks { margin: 26px auto 0; font-size: 1.05rem; }
+/* ---------- кнопки ---------- */
+.btn { font: inherit; font-weight: 650; cursor: pointer; border: 0; border-radius: 12px; padding: 11px 18px; color: #fff; background: var(--grad); white-space: nowrap;
+  box-shadow: 0 8px 22px -10px rgba(110,120,255,.8), inset 0 1px 0 rgba(255,255,255,.25); transition: filter .15s, transform .15s; }
+.btn:hover { filter: brightness(1.08); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { filter: grayscale(.8) brightness(.7); cursor: default; }
+.btn.ghost { color: var(--text); background: rgba(255,255,255,.07); border: 1px solid var(--stroke); box-shadow: none; }
+.btn.sm { padding: 7px 13px; font-size: .86rem; border-radius: 10px; }
+.btn.danger { color: var(--red); background: rgba(255,107,112,.08); border: 1px solid rgba(255,139,143,.3); box-shadow: none; }
+.cta { display: inline-flex; align-items: center; gap: 9px; padding: 14px 24px; border-radius: 15px; font-weight: 650; font-size: 1.02rem; color: #fff;
+  background: var(--grad); box-shadow: 0 16px 40px -14px rgba(110,120,255,.9), inset 0 1px 0 rgba(255,255,255,.28); transition: transform .18s var(--ease), box-shadow .18s, filter .18s; }
+.cta:hover { transform: translateY(-2px); filter: brightness(1.07); box-shadow: 0 22px 46px -14px rgba(110,120,255,1), inset 0 1px 0 rgba(255,255,255,.28); }
+.cta.ghost { color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--stroke2); box-shadow: none; }
+.cta.ghost:hover { background: rgba(255,255,255,.1); }
+.cta small { font-weight: 500; opacity: .75; font-size: .82rem; }
 
-.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 48px; text-align: left; }
-.card { border-radius: var(--r); padding: 22px; }
-.card .ic { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: rgba(255,255,255,.06); border: 1px solid var(--stroke); color: var(--dim); }
-.card.ok .ic { color: #5ee0a5; background: rgba(94,224,165,.1); border-color: rgba(94,224,165,.3); }
-.card.off .ic { color: var(--red); background: rgba(255,107,112,.08); border-color: rgba(255,139,143,.3); }
-.card h3 { margin: 14px 0 6px; font-size: 1.05rem; }
-.card p { margin: 0; color: var(--dim); font-size: .93rem; }
+/* ---------- первый экран ---------- */
+.hero { display: grid; grid-template-columns: 1.02fr 1.18fr; gap: 40px; align-items: center; padding: 84px 0 20px; }
+.pill { display: inline-flex; align-items: center; gap: 9px; padding: 6px 14px 6px 8px; border-radius: 99px; font-size: .86rem; color: var(--dim);
+  background: rgba(255,255,255,.05); border: 1px solid var(--stroke2); transition: background .15s, color .15s; }
+.pill:hover { background: rgba(255,255,255,.09); color: var(--text); }
+.pill b { padding: 2px 9px; border-radius: 99px; color: #fff; font-size: .74rem; background: var(--grad); }
+h1 { font-size: clamp(2.5rem, 5.6vw, 4.4rem); line-height: 1.02; letter-spacing: -.035em; margin: 22px 0 0; font-weight: 780; }
+.grad { background: linear-gradient(100deg, #9cc4ff 0%, var(--acc) 35%, var(--acc2) 75%, #c3a6ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lead { font-size: clamp(1.03rem, 1.5vw, 1.18rem); color: var(--dim); max-width: 34rem; margin: 22px 0 0; }
+.ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
+.ticks { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 26px 0 0; padding: 0; list-style: none; color: var(--dim); font-size: .92rem; }
+.ticks li { display: inline-flex; align-items: center; gap: 7px; }
+.ticks svg { color: var(--green); }
 
-section { padding: 84px 0 0; }
-h2 { font-size: clamp(1.5rem, 3.2vw, 2.2rem); letter-spacing: -.02em; margin: 0; text-align: center; }
-.sub { color: var(--dim); text-align: center; max-width: 40rem; margin: 12px auto 0; }
+.art { position: relative; perspective: 1600px; }
+.window { border-radius: 18px; padding: 0; overflow: hidden; transform: rotateY(-9deg) rotateX(5deg) rotateZ(.5deg); transform-origin: left center;
+  box-shadow: 0 50px 100px -30px rgba(40,60,200,.55), 0 30px 60px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.1);
+  transition: transform .8s var(--ease); }
+.art:hover .window { transform: rotateY(-4deg) rotateX(2deg); }
+.window .bar { display: flex; gap: 7px; padding: 11px 14px; border-bottom: 1px solid var(--stroke); }
+.window .bar i { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.14); }
+.window img { width: 100%; height: auto; }
+.art::before { content: ""; position: absolute; inset: 10% 5% 0 15%; background: radial-gradient(circle, rgba(91,157,255,.45), transparent 65%); filter: blur(40px); z-index: -1; }
+.float { position: absolute; border-radius: 16px; padding: 12px 14px; font-size: .88rem; display: flex; align-items: center; gap: 11px; animation: bob 6s ease-in-out infinite; }
+.float .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff; background: var(--grad); flex: none; }
+.float small { display: block; color: var(--faint); font-size: .76rem; }
+.float b { font-weight: 650; }
+.float .pen { color: var(--gold); font-weight: 650; }
+.f1 { left: -34px; bottom: 16%; max-width: 270px; }
+.f2 { right: -14px; top: -26px; animation-delay: -3s; }
+@keyframes bob { 50% { transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .float { animation: none; } }
 
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 36px; }
-.stat { border-radius: var(--r); padding: 18px 20px; }
-.stat b { display: block; font-size: 1.8rem; letter-spacing: -.02em; }
-.stat span { color: var(--dim); font-size: .9rem; }
+/* ---------- секции ---------- */
+section { padding: 104px 0 0; }
+.eyebrow { display: block; text-align: center; color: var(--acc); font-size: .8rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+h2 { font-size: clamp(1.7rem, 3.4vw, 2.6rem); letter-spacing: -.025em; line-height: 1.12; margin: 10px 0 0; text-align: center; }
+.sub { color: var(--dim); text-align: center; max-width: 42rem; margin: 14px auto 0; font-size: 1.04rem; }
 
-.gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 36px; }
-.gallery figure { margin: 0; border-radius: 18px; padding: 8px; }
+/* цифры */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 72px; }
+.stat { border-radius: var(--r); padding: 20px 22px; }
+.stat b { display: block; font-size: 2rem; letter-spacing: -.03em; line-height: 1.1; }
+.stat b span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stat > span { color: var(--dim); font-size: .9rem; }
+
+/* сервера */
+.projects { display: grid; grid-template-columns: 1fr 2fr; gap: 14px; margin-top: 40px; }
+.proj { border-radius: 22px; padding: 24px; }
+.proj .ph { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.proj h3 { margin: 0; font-size: 1.35rem; letter-spacing: -.01em; }
+.proj .ph span { color: var(--faint); font-size: .88rem; }
+.proj p { color: var(--dim); font-size: .93rem; margin: 8px 0 16px; }
+.chips2 { display: flex; flex-wrap: wrap; gap: 7px; }
+.chips2 span { padding: 6px 12px; border-radius: 10px; font-size: .86rem; background: rgba(255,255,255,.05); border: 1px solid var(--stroke); color: var(--text);
+  transition: border-color .15s, background .15s; }
+.chips2 span:hover { border-color: rgba(91,157,255,.5); background: rgba(91,157,255,.1); }
+
+/* возможности — плитки */
+.bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px; }
+.feat { border-radius: 22px; padding: 24px; position: relative; overflow: hidden; transition: border-color .2s, transform .2s var(--ease); }
+.feat:hover { border-color: var(--stroke2); transform: translateY(-3px); }
+.feat .ic { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; color: #fff; background: var(--grad);
+  box-shadow: 0 10px 24px -10px rgba(110,120,255,.9); }
+.feat h3 { margin: 18px 0 6px; font-size: 1.12rem; }
+.feat p { margin: 0; color: var(--dim); font-size: .94rem; }
+.feat kbd { font: 600 .8rem/1 inherit; padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.08); border: 1px solid var(--stroke2); color: var(--text); }
+.feat.wide { grid-column: span 2; }
+.feat.wide .shot { margin-top: 20px; border-radius: 12px; border: 1px solid var(--stroke); box-shadow: 0 18px 40px -18px rgba(0,0,0,.8); }
+.feat::after { content: ""; position: absolute; width: 220px; height: 220px; right: -80px; top: -80px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(138,107,255,.18), transparent 70%); pointer-events: none; }
+
+/* снимки */
+.gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 40px; }
+.gallery figure { margin: 0; border-radius: 20px; padding: 8px; transition: transform .2s var(--ease); }
+.gallery figure:hover { transform: translateY(-3px); }
 .gallery figure.wide { grid-column: 1 / -1; }
-.gallery img { width: 100%; height: auto; border-radius: 12px; cursor: zoom-in; filter: saturate(.92); transition: filter .2s; }
-.gallery figure.overlay { background: linear-gradient(135deg, rgba(91,157,255,.12), rgba(123,107,255,.06)), rgba(255,255,255,.03); }
-.gallery figure.overlay img { max-width: 720px; margin: 18px auto 6px; box-shadow: 0 18px 40px -18px rgba(0,0,0,.8); }
-.gallery img:hover { filter: none; }
-.gallery figcaption { color: var(--dim); font-size: .88rem; padding: 10px 6px 4px; }
-
-.faq { max-width: 800px; margin: 36px auto 0; display: grid; gap: 10px; }
-details { border-radius: 16px; padding: 4px 20px; }
-summary { cursor: pointer; list-style: none; padding: 14px 0; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; }
-summary::-webkit-details-marker { display: none; }
-summary::after { content: "+"; color: var(--faint); font-size: 1.3rem; line-height: 1; transition: transform .2s; }
-details[open] summary::after { transform: rotate(45deg); }
-details p { margin: 0 0 16px; color: var(--dim); }
-
-footer { padding: 70px 0 48px; color: var(--faint); font-size: .85rem; text-align: center; }
-footer b { color: var(--dim); font-weight: 600; }
-
-.lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.82); backdrop-filter: blur(8px); display: grid; place-items: center; cursor: zoom-out; padding: 16px; }
+.gallery img { width: 100%; height: auto; border-radius: 13px; cursor: zoom-in; }
+.gallery figcaption { color: var(--dim); font-size: .88rem; padding: 10px 8px 4px; }
+.lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(3,6,14,.86); backdrop-filter: blur(8px); display: grid; place-items: center; cursor: zoom-out; padding: 16px; }
 .lightbox img { max-height: 92vh; border-radius: 14px; }
 
+/* цены */
+.prices { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 880px; margin: 40px auto 0; }
+.price { border-radius: 24px; padding: 28px; display: flex; flex-direction: column; }
+.price h3 { margin: 0; font-size: 1.1rem; color: var(--dim); font-weight: 600; }
+.price .sum { font-size: 2.6rem; font-weight: 780; letter-spacing: -.03em; margin: 10px 0 2px; }
+.price .sum small { font-size: 1rem; color: var(--faint); font-weight: 500; letter-spacing: 0; }
+.price ul { list-style: none; padding: 0; margin: 18px 0 24px; display: grid; gap: 10px; color: var(--dim); font-size: .95rem; }
+.price li { display: flex; gap: 10px; align-items: flex-start; }
+.price li svg { color: var(--green); margin-top: 2px; }
+.price .cta { margin-top: auto; justify-content: center; }
+.price.pro { border-color: rgba(138,107,255,.45); background: linear-gradient(180deg, rgba(138,107,255,.16), rgba(91,157,255,.05)), rgba(255,255,255,.03); position: relative; }
+.price.pro .tag { position: absolute; top: 18px; right: 18px; padding: 4px 10px; border-radius: 99px; font-size: .74rem; font-weight: 700; color: #fff; background: var(--grad); }
+.note { text-align: center; color: var(--faint); font-size: .88rem; margin-top: 16px; }
+
+/* вопросы */
+.faq { max-width: 820px; margin: 40px auto 0; display: grid; gap: 10px; }
+details { border-radius: 16px; padding: 4px 22px; transition: border-color .2s; }
+details[open] { border-color: rgba(91,157,255,.35); }
+summary { cursor: pointer; list-style: none; padding: 16px 0; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--acc); font-size: 1.4rem; line-height: 1; transition: transform .2s; }
+details[open] summary::after { transform: rotate(45deg); }
+details p { margin: 0 0 18px; color: var(--dim); }
+
+/* финальный призыв */
+.final { margin-top: 110px; border-radius: 28px; padding: 54px 24px; text-align: center; position: relative; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 120%, rgba(138,107,255,.35), transparent 60%), radial-gradient(ellipse at 50% -20%, rgba(91,157,255,.25), transparent 60%), rgba(255,255,255,.03); }
+.final img { width: 84px; height: 84px; margin: 0 auto 18px; border-radius: 22px; box-shadow: 0 20px 50px -14px rgba(91,157,255,.8); }
+.final h2 { margin: 0; }
+.final .ctas { justify-content: center; }
+
+footer { padding: 56px 0 44px; color: var(--faint); font-size: .86rem; display: flex; gap: 14px 28px; flex-wrap: wrap; align-items: center; justify-content: space-between; border-top: 1px solid var(--stroke); margin-top: 80px; }
+footer .brand { color: var(--text); }
+footer b { color: var(--dim); font-weight: 600; }
+
+/* появление при прокрутке */
+.js .rv { opacity: 0; transform: translateY(18px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+.js .rv.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .js .rv { opacity: 1; transform: none; transition: none; } }
+
 /* ---------------- форум предложений ---------------- */
-.forum { max-width: 820px; margin: 36px auto 0; }
+.forum { max-width: 820px; margin: 40px auto 0; }
 .compose { border-radius: var(--r); padding: 16px; }
 .compose textarea, .compose input, .cform textarea, .cform input, .admin-bar input, .rform textarea {
-  width: 100%; font: inherit; color: var(--text); background: rgba(0,0,0,.22); border: 1px solid var(--stroke); border-radius: 12px; padding: 12px 14px; outline: none; transition: border-color .15s, background .15s; }
-.compose textarea:focus, .compose input:focus, .cform textarea:focus, .cform input:focus, .admin-bar input:focus, .rform textarea:focus { border-color: rgba(255,200,97,.5); background: rgba(0,0,0,.3); }
+  width: 100%; font: inherit; color: var(--text); background: rgba(0,0,0,.25); border: 1px solid var(--stroke); border-radius: 12px; padding: 12px 14px; outline: none; transition: border-color .15s, background .15s; }
+.compose textarea:focus, .compose input:focus, .cform textarea:focus, .cform input:focus, .admin-bar input:focus, .rform textarea:focus { border-color: rgba(91,157,255,.6); background: rgba(0,0,0,.32); }
 .compose textarea { min-height: 96px; resize: vertical; }
 .compose .row, .cform .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
 .compose .row input { flex: 1; min-width: 0; }
 .count { color: var(--faint); font-size: .82rem; white-space: nowrap; }
 .hp { position: absolute !important; left: -9999px !important; width: 1px !important; height: 1px !important; opacity: 0 !important; }
-.btn { font: inherit; font-weight: 650; cursor: pointer; border: 0; border-radius: 12px; padding: 11px 18px; color: #1a1205; background: linear-gradient(135deg, #ffd98a, #ffb35c); white-space: nowrap; transition: filter .15s, transform .15s; }
-.btn:hover { filter: brightness(1.06); }
-.btn:active { transform: translateY(1px); }
-.btn:disabled { filter: grayscale(.8) brightness(.7); cursor: default; }
-.btn.ghost { color: var(--text); background: rgba(255,255,255,.07); border: 1px solid var(--stroke); }
-.btn.sm { padding: 7px 12px; font-size: .86rem; border-radius: 10px; }
-.btn.danger { color: var(--red); background: rgba(255,107,112,.08); border: 1px solid rgba(255,139,143,.3); }
 .msg { margin: 10px 2px 0; font-size: .9rem; color: var(--dim); min-height: 1.2em; }
-.msg.err { color: var(--red); } .msg.ok { color: #5ee0a5; }
+.msg.err { color: var(--red); } .msg.ok { color: var(--green); }
 .msg:empty { display: none; }
-
 .toolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 22px 0 12px; }
 .tabs { display: inline-flex; padding: 4px; border-radius: 13px; background: rgba(255,255,255,.04); border: 1px solid var(--stroke); }
 .tabs button { font: inherit; font-size: .9rem; color: var(--dim); background: none; border: 0; padding: 7px 14px; border-radius: 9px; cursor: pointer; transition: background .15s, color .15s; }
 .tabs button.on { color: var(--text); background: rgba(255,255,255,.1); }
 .toolbar select { font: inherit; font-size: .9rem; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid var(--stroke); border-radius: 11px; padding: 8px 12px; }
-.toolbar select option { background: #141a24; }
-.total { color: var(--faint); font-size: .86rem; }
-
+.toolbar select option { background: #121829; }
 .posts { display: grid; gap: 10px; }
 .post { display: flex; gap: 14px; border-radius: 18px; padding: 16px 18px 14px 14px; animation: rise .35s var(--ease) both; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
@@ -163,126 +236,218 @@ footer b { color: var(--dim); font-weight: 600; }
 .vote:hover { color: var(--text); border-color: var(--stroke2); }
 .vote:active { transform: scale(.95); }
 .vote b { font-size: 1.05rem; line-height: 1; }
-.vote.on { color: var(--gold); background: rgba(255,200,97,.1); border-color: rgba(255,200,97,.4); }
+.vote.on { color: #fff; background: linear-gradient(135deg, rgba(91,157,255,.35), rgba(138,107,255,.35)); border-color: rgba(138,107,255,.6); }
 .post .body { flex: 1; min-width: 0; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--faint); font-size: .83rem; }
-.meta .who { color: var(--dim); font-weight: 600; }
+.meta .who { color: var(--dim); font-weight: 600; padding: 0; }
 .chip { display: inline-flex; padding: 2px 9px; border-radius: 99px; font-size: .76rem; font-weight: 650; border: 1px solid var(--stroke2); color: var(--dim); }
 .chip.st-review { color: #8fb8ff; border-color: rgba(143,184,255,.35); background: rgba(143,184,255,.08); }
-.chip.st-planned { color: var(--gold); border-color: rgba(255,200,97,.38); background: rgba(255,200,97,.08); }
-.chip.st-done { color: #5ee0a5; border-color: rgba(94,224,165,.35); background: rgba(94,224,165,.08); }
+.chip.st-planned { color: #c3a6ff; border-color: rgba(195,166,255,.38); background: rgba(195,166,255,.08); }
+.chip.st-done { color: var(--green); border-color: rgba(94,224,165,.35); background: rgba(94,224,165,.08); }
 .chip.st-rejected { color: var(--red); border-color: rgba(255,139,143,.3); background: rgba(255,107,112,.07); }
 .post .text { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.reply { margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(255,200,97,.06); border-left: 3px solid var(--gold); }
-.reply b { font-size: .82rem; color: var(--gold); }
+.reply { margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(138,107,255,.08); border-left: 3px solid var(--acc2); }
+.reply b { font-size: .82rem; color: #c3a6ff; }
 .reply p { margin: 3px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dim); font-size: .94rem; }
 .acts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 10px; }
 .link { font: inherit; font-size: .86rem; color: var(--faint); background: none; border: 0; padding: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .link:hover { color: var(--text); }
 .link.red:hover { color: var(--red); }
 .acts select { font: inherit; font-size: .84rem; color: var(--dim); background: rgba(255,255,255,.04); border: 1px solid var(--stroke); border-radius: 9px; padding: 4px 8px; }
-.acts select option { background: #141a24; }
+.acts select option { background: #121829; }
 .comments { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--stroke); display: grid; gap: 10px; }
 .comments[hidden] { display: none; }
 .cm { font-size: .93rem; }
 .cm .meta { font-size: .8rem; }
 .cm p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dim); }
-.cm.author .who { color: var(--gold); }
+.cm.author .who { color: #c3a6ff; }
 .cform textarea, .rform textarea { min-height: 60px; resize: vertical; font-size: .93rem; padding: 10px 12px; }
 .cform .row input { flex: 1; min-width: 0; font-size: .9rem; padding: 9px 12px; }
 .rform { margin-top: 10px; display: grid; gap: 8px; }
 .rform .row { display: flex; gap: 8px; }
 .empty { text-align: center; color: var(--faint); padding: 34px 16px; border-radius: 18px; }
 .more { display: flex; justify-content: center; margin-top: 14px; }
-.admin-bar { display: flex; gap: 8px; align-items: center; margin-top: 12px; padding: 10px 12px; border-radius: 14px; border: 1px dashed rgba(255,200,97,.35); background: rgba(255,200,97,.04); font-size: .9rem; color: var(--dim); }
+.admin-bar { display: flex; gap: 8px; align-items: center; margin-top: 12px; padding: 10px 12px; border-radius: 14px; border: 1px dashed rgba(138,107,255,.45); background: rgba(138,107,255,.06); font-size: .9rem; color: var(--dim); }
 .admin-bar input { flex: 1; padding: 8px 12px; }
 .skel { height: 96px; border-radius: 18px; background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.07), rgba(255,255,255,.03)); background-size: 200% 100%; animation: sh 1.4s linear infinite; }
 @keyframes sh { to { background-position: -200% 0; } }
 
-@media (max-width: 860px) {
-  .cards { grid-template-columns: 1fr; }
+/* ---------- узкие экраны ---------- */
+@media (max-width: 960px) {
+  .hero { grid-template-columns: 1fr; gap: 56px; padding-top: 64px; text-align: center; }
+  .lead { margin-left: auto; margin-right: auto; }
+  .ctas, .ticks { justify-content: center; }
+  br.lg { display: none; }
+  .window { transform: none; }
+  .f1 { left: 4px; bottom: -26px; } .f2 { right: 4px; top: -22px; }
+  .bento { grid-template-columns: 1fr 1fr; }
+  .projects { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
   .stats { grid-template-columns: 1fr 1fr; }
+  .bento, .prices { grid-template-columns: 1fr; }
+  .feat.wide { grid-column: auto; }
 }
 @media (max-width: 640px) {
   .links { display: none; }
+  .nav .brand span.t { display: none; }
   .gallery { grid-template-columns: 1fr; }
-  .hero { padding-top: 60px; }
+  .float { font-size: .8rem; padding: 9px 11px; }
+  .f2 { display: none; }
+  section { padding-top: 84px; }
   .compose .row { flex-wrap: wrap; }
   .compose .row input { flex-basis: 100%; }
   .compose .row .btn { margin-left: auto; }
   .post { gap: 11px; padding: 14px 14px 12px 11px; }
   .vote { width: 46px; height: 56px; }
+  footer { justify-content: center; text-align: center; }
 }
 </style>
+<script>document.documentElement.classList.add("js");</script>
 </head>
 <body>
-<div class="aurora"><i></i><i></i></div>
+<div class="aurora"><i></i><i></i><i></i></div>
+<div class="grid"></div>
 
 <svg width="0" height="0" style="position:absolute">
   <defs>
     <symbol id="scale" viewBox="0 0 24 24"><path d="M12 3v18M7.5 21h9M5 7h14"/><path d="M5 7l-3 6.5a3 3 0 0 0 6 0z"/><path d="M19 7l-3 6.5a3 3 0 0 0 6 0z"/><circle cx="12" cy="4.5" r="1.3"/></symbol>
     <symbol id="book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></symbol>
-    <symbol id="power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
     <symbol id="heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></symbol>
     <symbol id="up" viewBox="0 0 24 24"><path d="M6 14l6-6 6 6"/></symbol>
+    <symbol id="down" viewBox="0 0 24 24"><path d="M12 4v12M6.5 11 12 16.5 17.5 11M5 20h14"/></symbol>
     <symbol id="chat" viewBox="0 0 24 24"><path d="M20 12a7.5 7.5 0 0 1-11 6.6L4 20l1.4-4.6A7.5 7.5 0 1 1 20 12z"/></symbol>
     <symbol id="bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></symbol>
+    <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+    <symbol id="spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+    <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+    <symbol id="list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+    <symbol id="shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="m5 12.5 4.2 4.2L19 7"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
   </defs>
 </svg>
 
 <div class="wrap">
   <nav class="nav glass">
-    <span class="brand"><span class="logo"><img src="img/logo.png" alt=""></span>Памятка RMRP</span>
-    <div class="links"><a href="#what">Что умеет</a><a href="#screens">Как выглядит</a><a href="#forum">Предложения</a><a href="#faq">Вопросы</a></div>
+    <a class="brand" href="#"><span class="logo"><img src="img/logo.png" alt=""></span><span class="t">Памятка</span></a>
+    <div class="links"><a href="#servers">Сервера</a><a href="#what">Возможности</a><a href="#screens">Как выглядит</a><a href="#pricing">Цены</a><a href="#forum">Идеи</a><a href="#faq">Вопросы</a></div>
     <span id="acct"><a class="btn ghost sm" href="/auth?step=start&web=1&next=home">Войти</a></span>
     <a class="btn sm" href="/auth?step=download">Скачать</a>
   </nav>
 
   <header class="hero">
-    <span class="badge rise">Версия 5.9</span>
-    <h1>Законы RMRP — <span class="glow">под рукой</span></h1>
-    <p class="lead">Справочник по законам RMRP «Криминальная Москва». Найдите статью по номеру или спросите своими словами — «угнал тачку, сколько дадут» — и получите статью и наказание за секунду. Прямо в игре — голосом.</p>
-    <p class="thanks">Какой должна стать Памятка дальше — решаем вместе с вами на форуме ниже.</p>
-    <div class="ctas">
-      <a class="cta" href="/auth?step=download"><svg class="i"><use href="#up"/></svg>Скачать для Windows</a>
-      <a class="cta ghost" href="#forum"><svg class="i"><use href="#bulb"/></svg>Предложить идею</a>
+    <div>
+      <a class="pill" href="#servers"><b>Новое</b>Majestic RP — все 19 серверов<svg class="i"><use href="#arrow"/></svg></a>
+      <h1>Законы сервера&nbsp;—<br class="lg"> <span class="grad">под&nbsp;рукой</span></h1>
+      <p class="lead">Статья, наказание и порядок действий за секунду. Найдите по номеру или спросите своими словами — «угнал тачку, сколько дадут». Прямо в игре — голосом.</p>
+      <div class="ctas">
+        <a class="cta" href="/auth?step=download"><svg class="i"><use href="#down"/></svg>Скачать для Windows</a>
+        <a class="cta ghost" href="#screens">Как выглядит</a>
+      </div>
+      <ul class="ticks">
+        <li><svg class="i"><use href="#check"/></svg>Бесплатно</li>
+        <li><svg class="i"><use href="#check"/></svg>Работает без интернета</li>
+        <li><svg class="i"><use href="#check"/></svg>Без VPN</li>
+      </ul>
     </div>
-
-    <div class="cards" id="what">
-      <div class="card glass ok"><div class="ic"><svg class="i"><use href="#book"/></svg></div>
-        <h3>Бесплатно</h3>
-        <p>Все законы сервера, поиск по номеру и словам, помощник, понимающий сленг, памятки по задержанию, фразы и плашка поверх игры с голосовым вводом.</p></div>
-      <div class="card glass ok"><div class="ic"><svg class="i"><use href="#chat"/></svg></div>
-        <h3>Вход через Discord</h3>
-        <p>Пароль не нужен: программа получает только ник, аватар и номер аккаунта. Скачать и пользоваться можно после входа, дальше законы работают и без интернета.</p></div>
-      <div class="card glass"><div class="ic"><svg class="i"><use href="#heart"/></svg></div>
-        <h3>Нейросети — по подписке</h3>
-        <p>Gemini и Grok объясняют статьи простыми словами. Подписка <b id="price">150</b> ₽ на 30 дней — картой или кошельком ЮMoney, без автосписаний. Есть ключ активации — введите его в «Аккаунте».</p></div>
+    <div class="art">
+      <div class="window glass"><div class="bar"><i></i><i></i><i></i></div><img src="img/home.webp?v=2" alt="Главный экран Памятки" width="1200" height="717"></div>
+      <div class="float glass f1"><span class="ic"><svg class="i"><use href="#scale"/></svg></span><span><small>УК · статья 10.4</small><b>Разбой</b> → <span class="pen">до 30 мес ★★★</span></span></div>
+      <div class="float glass f2"><span class="ic"><svg class="i"><use href="#mic"/></svg></span><span><small>Ctrl+Alt+V в игре</small>«сколько дают за разбой»</span></div>
     </div>
   </header>
 
-  <section id="screens">
-    <h2>Как выглядит</h2>
-    <p class="sub">Тёмное стекло, шесть цветовых тем, поиск по 1239 статьям и помощник, который понимает разговорный язык.</p>
-    <div class="stats">
-      <div class="stat glass"><b>1239</b><span>статей из законов сервера</span></div>
-      <div class="stat glass"><b>31</b><span>кодекс, закон и регламент</span></div>
-      <div class="stat glass"><b>&lt; 1 с</b><span>на поиск статьи</span></div>
-      <div class="stat glass"><b>5.9</b><span>последняя версия</span></div>
-    </div>
-    <div class="gallery">
-      <figure class="glass wide"><img src="img/home.webp?v=2" alt="Главный экран Памятки RMRP" width="1200" height="717" loading="lazy"><figcaption>Главный экран</figcaption></figure>
-      <figure class="glass wide overlay"><img src="img/overlay.webp?v=2" alt="Плашка поверх игры с найденной статьёй" width="700" height="100" loading="lazy"><figcaption>Плашка поверх игры: Ctrl+Alt+V — спросите голосом, статья появится сверху экрана, игра не теряет управление</figcaption></figure>
-      <figure class="glass"><img src="img/ask.webp?v=2" alt="Помощник находит статью по вопросу своими словами" width="1200" height="717" loading="lazy"><figcaption>Помощник: спросите своими словами — получите статью и наказание</figcaption></figure>
-      <figure class="glass"><img src="img/laws.webp?v=2" alt="Статья закона" width="1200" height="717" loading="lazy"><figcaption>Законы с выделенными санкциями</figcaption></figure>
-      <figure class="glass"><img src="img/guide.webp?v=2" alt="Памятка по задержанию" width="1200" height="717" loading="lazy"><figcaption>Памятки: сроки и порядок задержания</figcaption></figure>
-      <figure class="glass"><img src="img/settings.webp?v=2" alt="Настройки" width="1200" height="717" loading="lazy"><figcaption>Темы, стекло, масштаб, горячие клавиши</figcaption></figure>
+  <div class="stats">
+    <div class="stat glass rv"><b><span>20</span></b><span>серверов: RMRP и Majestic RP</span></div>
+    <div class="stat glass rv"><b><span>39 000+</span></b><span>статей, кодексов и правил</span></div>
+    <div class="stat glass rv"><b><span>&lt; 1 с</span></b><span>на поиск статьи</span></div>
+    <div class="stat glass rv"><b><span id="ver">6.3</span></b><span>последняя версия</span></div>
+  </div>
+
+  <section id="servers">
+    <span class="eyebrow">Сервера</span>
+    <h2>Законы именно вашего сервера</h2>
+    <p class="sub">У каждого сервера свои кодексы. Выберите проект и сервер — Памятка скачает его законы и будет держать их свежими.</p>
+    <div class="projects">
+      <div class="proj glass rv">
+        <div class="ph"><h3>RMRP</h3><span>1 239 статей</span></div>
+        <p>Уголовный, административный, процессуальный кодексы, ПДД и памятки по задержанию.</p>
+        <div class="chips2"><span>Криминальная Москва</span></div>
+      </div>
+      <div class="proj glass rv">
+        <div class="ph"><h3>Majestic RP</h3><span>19 серверов · 38 000+ статей</span></div>
+        <p>Конституция, кодексы и законы штата, правила проекта — у каждого сервера свои.</p>
+        <div class="chips2"><span>New York</span><span>Detroit</span><span>Chicago</span><span>San Francisco</span><span>Atlanta</span><span>San Diego</span><span>Los Angeles</span><span>Miami</span><span>Las Vegas</span><span>Washington</span><span>Dallas</span><span>Boston</span><span>Houston</span><span>Seattle</span><span>Phoenix</span><span>Denver</span><span>Portland</span><span>Orlando</span><span>Memphis</span></div>
+      </div>
     </div>
   </section>
 
+  <section id="what">
+    <span class="eyebrow">Возможности</span>
+    <h2>Всё, что нужно на смене</h2>
+    <p class="sub">Полицейский, адвокат, судья или нарушитель — Памятка подскажет статью быстрее, чем вы откроете форум.</p>
+    <div class="bento">
+      <div class="feat glass rv"><span class="ic"><svg class="i"><use href="#search"/></svg></span><h3>Поиск по номеру и словам</h3><p>«УК 47», «разбой», «задержание» — нужная статья с наказанием за доли секунды.</p></div>
+      <div class="feat glass rv"><span class="ic"><svg class="i"><use href="#chat"/></svg></span><h3>Помощник понимает сленг</h3><p>«Угнал тачку», «гонял без прав» — переведёт в статью, наказание и звёзды розыска.</p></div>
+      <div class="feat glass rv"><span class="ic"><svg class="i"><use href="#list"/></svg></span><h3>Памятки и фразы</h3><p>Порядок задержания, права задержанного, готовые фразы для отыгрыша.</p></div>
+      <div class="feat glass wide rv"><span class="ic"><svg class="i"><use href="#mic"/></svg></span><h3>Голосом прямо в игре</h3><p>Нажмите <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>V</kbd> и скажите вопрос — статья появится плашкой поверх GTA 5. Игра не теряет управление, спрятать — <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Q</kbd>.</p>
+        <img class="shot" src="img/overlay.webp?v=2" alt="Плашка поверх игры с найденной статьёй" width="700" height="100" loading="lazy"></div>
+      <div class="feat glass rv"><span class="ic"><svg class="i"><use href="#shield"/></svg></span><h3>Без интернета и без VPN</h3><p>Законы хранятся на компьютере. Если провайдер режет сервер, Памятка сама идёт запасным путём.</p></div>
+      <div class="feat glass rv"><span class="ic"><svg class="i"><use href="#spark"/></svg></span><h3>Нейросети Gemini и Grok</h3><p>Объяснят статью простыми словами и разберут сложную ситуацию — по подписке.</p></div>
+      <div class="feat glass rv"><span class="ic"><svg class="i"><use href="#book"/></svg></span><h3>Избранное и темы</h3><p>Свои закладки для каждого сервера, шесть цветовых тем, стекло и масштаб.</p></div>
+      <div class="feat glass rv"><span class="ic"><svg class="i"><use href="#up"/></svg></span><h3>Обновляется сама</h3><p>Новые законы и версии приходят автоматически — ничего не нужно скачивать заново.</p></div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <span class="eyebrow">Как выглядит</span>
+    <h2>Тёмное стекло, ничего лишнего</h2>
+    <p class="sub">Нажмите на снимок, чтобы рассмотреть поближе.</p>
+    <div class="gallery">
+      <figure class="glass rv"><img src="img/ask.webp?v=2" alt="Помощник находит статью по вопросу своими словами" width="1200" height="717" loading="lazy"><figcaption>Помощник: спросите своими словами — получите статью и наказание</figcaption></figure>
+      <figure class="glass rv"><img src="img/laws.webp?v=2" alt="Статья закона" width="1200" height="717" loading="lazy"><figcaption>Законы с выделенными санкциями</figcaption></figure>
+      <figure class="glass rv"><img src="img/guide.webp?v=2" alt="Памятка по задержанию" width="1200" height="717" loading="lazy"><figcaption>Памятки: сроки и порядок задержания</figcaption></figure>
+      <figure class="glass rv"><img src="img/settings.webp?v=2" alt="Настройки" width="1200" height="717" loading="lazy"><figcaption>Темы, стекло, масштаб, горячие клавиши</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <span class="eyebrow">Цены</span>
+    <h2>Главное — бесплатно</h2>
+    <p class="sub">Законы, поиск, помощник и голос — навсегда без оплаты. Подписка нужна только для нейросетей.</p>
+    <div class="prices">
+      <div class="price glass rv">
+        <h3>Бесплатно</h3>
+        <div class="sum">0 ₽ <small>навсегда</small></div>
+        <ul>
+          <li><svg class="i"><use href="#check"/></svg>Законы всех 20 серверов</li>
+          <li><svg class="i"><use href="#check"/></svg>Поиск и помощник, понимающий сленг</li>
+          <li><svg class="i"><use href="#check"/></svg>Плашка в игре с голосовым вводом</li>
+          <li><svg class="i"><use href="#check"/></svg>Памятки, фразы, избранное</li>
+        </ul>
+        <a class="cta ghost" href="/auth?step=download">Скачать</a>
+      </div>
+      <div class="price glass pro rv">
+        <span class="tag">Нейросети</span>
+        <h3>Подписка</h3>
+        <div class="sum"><span id="price">150</span> ₽ <small>/ 30 дней</small></div>
+        <ul>
+          <li><svg class="i"><use href="#check"/></svg>Всё из бесплатного</li>
+          <li><svg class="i"><use href="#check"/></svg>Gemini и Grok объясняют статьи простыми словами</li>
+          <li><svg class="i"><use href="#check"/></svg>Разбор сложных ситуаций по законам вашего сервера</li>
+          <li><svg class="i"><use href="#check"/></svg>Без автосписаний, оплата картой или ЮMoney</li>
+        </ul>
+        <a class="cta" href="/auth?step=download">Скачать и подключить</a>
+      </div>
+    </div>
+    <p class="note">Оплата — в программе, раздел «Аккаунт». Есть ключ активации — введите его там же.</p>
+  </section>
+
   <section id="forum">
-    <h2>Предложения</h2>
-    <p class="sub">Чего не хватало в Памятке? Что добавить в новую версию? Пишите без регистрации и голосуйте за чужие идеи — самые нужные поднимаются наверх.</p>
+    <span class="eyebrow">Идеи</span>
+    <h2>Какой должна стать Памятка</h2>
+    <p class="sub">Чего не хватает? Пишите без регистрации и голосуйте за чужие идеи — самые нужные поднимаются наверх.</p>
     <div class="forum">
       <form class="compose glass" id="compose" novalidate>
         <textarea id="f-text" maxlength="1000" placeholder="Например: искать статью по номеру голосом, тёмная тема для ночных смен…" aria-label="Ваше предложение"></textarea>
@@ -315,24 +480,45 @@ footer b { color: var(--dim); font-weight: 600; }
   </section>
 
   <section id="faq">
-    <h2>Вопросы</h2>
+    <span class="eyebrow">Вопросы</span>
+    <h2>Частые вопросы</h2>
     <div class="faq">
-      <details class="glass"><summary>Как скачать?</summary><p>Нажмите «Скачать для Windows» и войдите через Discord — установщик скачается сразу после входа. Дальше программа обновляется сама.</p></details>
+      <details class="glass"><summary>Как скачать?</summary><p>Нажмите «Скачать для Windows» и войдите через Discord — программа скачается сразу после входа. Дальше она обновляется сама.</p></details>
+      <details class="glass"><summary>Какие сервера поддерживаются?</summary><p>RMRP «Криминальная Москва» и все 19 серверов Majestic RP. Сервер выбирается при первом запуске, сменить его можно в настройках или щелчком по названию сервера в шапке программы. У каждого сервера свои законы и своё избранное.</p></details>
+      <details class="glass"><summary>Нужен ли VPN?</summary><p>Нет. Законы, поиск и помощник работают даже без интернета. Нейросеть и подписка тоже работают без VPN: если провайдер режет сервер Памятки, она сама переключается на запасной путь. VPN может понадобиться только один раз — на первый вход через Discord, потому что сам Discord в России заблокирован. Дальше вход держится сам.</p></details>
       <details class="glass"><summary>Как спросить прямо в игре?</summary><p>Запустите GTA 5 в оконном режиме без рамки и нажмите Ctrl+Alt+V: сверху появится плашка, скажите вопрос — статья с наказанием появится там же. Спрятать — Ctrl+Alt+Q. Клавиши меняются в настройках Памятки.</p></details>
-      <details class="glass"><summary>Как работает подписка?</summary><p>Подписка нужна только для нейросетей. Оплата разовая, на 30 дней — картой или кошельком ЮMoney. Автосписаний нет. Подписка включается сама, как только платёж подтвердится, обычно за минуту. Оплатить можно в программе: раздел «Аккаунт».</p></details>
+      <details class="glass"><summary>Как работает подписка?</summary><p>Подписка нужна только для нейросетей. Оплата разовая, на 30 дней — картой или кошельком ЮMoney, автосписаний нет. Подписка включается сама, как только платёж подтвердится, обычно за минуту. Оплатить можно в программе: раздел «Аккаунт».</p></details>
       <details class="glass"><summary>У меня есть ключ активации</summary><p>Откройте в Памятке раздел «Аккаунт», введите ключ вида PM-XXXX-XXXX-XXXX в поле «Ключ активации» и нажмите «Активировать» — подписка продлится сразу.</p></details>
-      <details class="glass"><summary>Работает без интернета?</summary><p>Законы, поиск, помощник и голос — да. Интернет нужен для первого входа, нейросетей и обновлений.</p></details>
       <details class="glass"><summary>Как удалить программу?</summary><p>Закройте программу и удалите её файл с рабочего стола и папку «Памятка RMRP» в «Документах». Настройки и скачанные законы — в папке %APPDATA%\PamyatkaRMRP, её тоже можно удалить.</p></details>
-      <details class="glass"><summary>Это официальная программа RMRP?</summary><p>Нет. Это фанатский проект, не связанный с администрацией сервера. Законы взяты из открытого раздела форума — если формулировка важна, сверяйтесь с форумом.</p></details>
+      <details class="glass"><summary>Это официальная программа?</summary><p>Нет. Это фанатский проект, не связанный с администрациями RMRP и Majestic RP. Законы взяты из открытых разделов форумов — если формулировка важна, сверяйтесь с форумом своего сервера.</p></details>
     </div>
   </section>
 
+  <div class="final glass rv">
+    <img src="img/logo.png" alt="">
+    <h2>Законы под рукой — с первой смены</h2>
+    <p class="sub">Бесплатно, без VPN, для RMRP и всех серверов Majestic RP.</p>
+    <div class="ctas"><a class="cta" href="/auth?step=download"><svg class="i"><use href="#down"/></svg>Скачать для Windows</a><a class="cta ghost" href="#forum"><svg class="i"><use href="#bulb"/></svg>Предложить идею</a></div>
+  </div>
+
   <footer>
-    Памятка RMRP · неофициальный фанатский проект, не связан с администрацией RMRP ·
-    автор в Discord: <b>@tiktok_owner</b> · 2026
+    <span class="brand"><span class="logo"><img src="img/logo.png" alt=""></span>Памятка</span>
+    <span>Неофициальный фанатский проект, не связан с администрациями RMRP и Majestic RP · автор в Discord: <b>@tiktok_owner</b> · 2026</span>
   </footer>
 </div>
 
+<script>
+// плавное появление блоков при прокрутке и версия программы из манифеста
+(() => {
+  const els = document.querySelectorAll(".rv");
+  if (!("IntersectionObserver" in window)) { els.forEach(e => e.classList.add("in")); return; }
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -8% 0px" });
+  els.forEach((e, i) => { e.style.transitionDelay = (i % 4) * 60 + "ms"; io.observe(e); });
+  fetch("https://raw.githubusercontent.com/vadimran1/RMRP/main/manifest.json").then(r => r.json()).then(m => {
+    const v = m && m.app && m.app.version; if (v) document.getElementById("ver").textContent = v;
+  }).catch(() => {});
+})();
+</script>
 <script>
 "use strict";
 (function () {
