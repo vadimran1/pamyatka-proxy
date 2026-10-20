@@ -1021,6 +1021,24 @@ ID_RE = re.compile(r"^[0-9a-f]{16,40}$")
 VER_RE = re.compile(r"^[0-9]{1,3}([.][0-9]{1,3}){0,2}$")
 
 
+UPD_URL = os.environ.get(
+    "PAMYATKA_UPDATE_URL",
+    "https://raw.githubusercontent.com/vadimran1/RMRP/main").rstrip("/")
+_upd_cache = {"t": 0, "data": None}
+
+
+def update_manifest():
+    """manifest.json с GitHub, минуту держим в памяти экземпляра."""
+    now = time.time()
+    if _upd_cache["data"] is None or now - _upd_cache["t"] > 60:
+        req = urllib.request.Request(UPD_URL + "/manifest.json?t=%d" % int(now),
+                                     headers={"User-Agent": "Pamyatka"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            _upd_cache["data"] = json.loads(r.read(1 << 20).decode("utf-8"))
+        _upd_cache["t"] = now
+    return _upd_cache["data"]
+
+
 class handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json; charset=utf-8",
               extra=None):
@@ -1177,8 +1195,17 @@ class handler(BaseHTTPRequestHandler):
                     "Location": BASE + "/",
                     "Set-Cookie": COOKIE + "=; Path=/; Max-Age=0; HttpOnly; "
                                            "Secure; SameSite=Lax"})
-            if step not in ("stats", "subs", "sub"):
+            if step not in ("stats", "subs", "sub", "upd"):
                 return self._html(410, CLOSED_TITLE, CLOSED_TEXT)
+
+        if step == "upd":
+            # список обновлений для программы: у кого GitHub не открывается,
+            # получают его отсюда — через те же ретрансляторы, что и вход
+            try:
+                return self._send(200, update_manifest())
+            except Exception as e:
+                return self._send(502, {"error": "манифест не получен: %s"
+                                        % type(e).__name__})
 
         if step == "status":
             out = {"configured": ready, "stats": bool(STATS),
