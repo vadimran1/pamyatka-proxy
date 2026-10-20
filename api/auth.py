@@ -1195,8 +1195,32 @@ class handler(BaseHTTPRequestHandler):
                     "Location": BASE + "/",
                     "Set-Cookie": COOKIE + "=; Path=/; Max-Age=0; HttpOnly; "
                                            "Secure; SameSite=Lax"})
-            if step not in ("stats", "subs", "sub", "upd"):
+            if step not in ("stats", "subs", "sub", "upd", "file"):
                 return self._html(410, CLOSED_TITLE, CLOSED_TEXT)
+
+        if step == "file":
+            # файл обновления (кусок программы, законка) — для тех, у кого
+            # GitHub закрыт. Только то, что перечислено в манифесте, до 3,5 МБ:
+            # больше не пропустит ретранслятор Яндекса
+            name = g("name")
+            try:
+                man = update_manifest()
+            except Exception as e:
+                return self._send(502, {"error": "манифест: %s" % type(e).__name__})
+            known = {f.get("name") for f in man.get("files", []) + man.get("dbs", [])}
+            known |= {p.get("name") for p in (man.get("app") or {}).get("parts", [])}
+            if name not in known or not re.match(r"^[A-Za-z0-9._/-]{1,80}$", name or ""):
+                return self._send(404, {"error": "нет такого файла"})
+            try:
+                req = urllib.request.Request(UPD_URL + "/" + name,
+                                             headers={"User-Agent": "Pamyatka"})
+                with urllib.request.urlopen(req, timeout=25) as r:
+                    blob = r.read(3_600_001)
+            except Exception as e:
+                return self._send(502, {"error": "GitHub: %s" % type(e).__name__})
+            if len(blob) > 3_600_000:
+                return self._send(413, {"error": "файл больше 3,5 МБ"})
+            return self._send(200, blob, "application/octet-stream")
 
         if step == "upd":
             # список обновлений для программы: у кого GitHub не открывается,
