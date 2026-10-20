@@ -1200,8 +1200,9 @@ class handler(BaseHTTPRequestHandler):
 
         if step == "file":
             # файл обновления (кусок программы, законка) — для тех, у кого
-            # GitHub закрыт. Только то, что перечислено в манифесте, до 3,5 МБ:
-            # больше не пропустит ретранслятор Яндекса
+            # GitHub закрыт. Только то, что перечислено в манифесте. Отдаём
+            # сжатым (gzip): Яндекс пропускает ответ до 3,5 МБ уже в base64,
+            # а законы в json сжимаются в 5–6 раз
             name = g("name")
             try:
                 man = update_manifest()
@@ -1215,12 +1216,14 @@ class handler(BaseHTTPRequestHandler):
                 req = urllib.request.Request(UPD_URL + "/" + name,
                                              headers={"User-Agent": "Pamyatka"})
                 with urllib.request.urlopen(req, timeout=25) as r:
-                    blob = r.read(3_600_001)
+                    blob = r.read(40 << 20)
             except Exception as e:
                 return self._send(502, {"error": "GitHub: %s" % type(e).__name__})
-            if len(blob) > 3_600_000:
-                return self._send(413, {"error": "файл больше 3,5 МБ"})
-            return self._send(200, blob, "application/octet-stream")
+            import gzip
+            gz = gzip.compress(blob, 6)
+            if len(gz) > 2_600_000:
+                return self._send(413, {"error": "файл слишком большой даже сжатым"})
+            return self._send(200, gz, "application/gzip")
 
         if step == "upd":
             # список обновлений для программы: у кого GitHub не открывается,
