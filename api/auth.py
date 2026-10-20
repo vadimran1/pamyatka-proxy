@@ -1213,7 +1213,12 @@ class handler(BaseHTTPRequestHandler):
             if name not in known or not re.match(r"^[A-Za-z0-9._/-]{1,80}$", name or ""):
                 return self._send(404, {"error": "нет такого файла"})
             try:
-                req = urllib.request.Request(UPD_URL + "/" + name,
+                # по метке выпуска (d57…): ветка main у GitHub минут пять
+                # отдаёт старые файлы, а метка всегда ровно та, что в манифесте
+                src = UPD_URL
+                if man.get("tag") and UPD_URL.startswith("https://raw.githubusercontent.com/"):
+                    src = UPD_URL.rsplit("/", 1)[0] + "/" + man["tag"]
+                req = urllib.request.Request(src + "/" + name,
                                              headers={"User-Agent": "Pamyatka"})
                 with urllib.request.urlopen(req, timeout=25) as r:
                     blob = r.read(40 << 20)
