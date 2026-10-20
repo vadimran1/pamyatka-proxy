@@ -804,6 +804,9 @@ class handler(BaseHTTPRequestHandler):
         # порядок обхода: сначала выбранная сеть, затем запасные
         order = [provider] + [n for n in KNOWN
                               if n != provider and key_for(n)]
+        if getattr(_req, "role", "") and "gemini" in order:
+            # длинный разбор (адвокат и т. п.) Gemini успевает, Grok — нет
+            order = ["gemini"] + [n for n in order if n != "gemini"]
         answer, used, last = "", provider, None
         started = time.time()
         for n, prov in enumerate(order):
