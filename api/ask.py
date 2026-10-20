@@ -112,8 +112,13 @@ def models_for(provider, key):
             with urllib.request.urlopen(req, timeout=20) as r:
                 ids = [m.get("id", "") for m in
                        json.loads(r.read().decode()).get("data", [])]
-            # сперва то, что просили, потом всё остальное
-            pref = [i for i in ids if "grok" in i.lower()]
+            # сперва Grok, и из них быстрые: «fast»/«mini» вперёд, тяжёлые и
+            # рассуждающие — назад (они думают по минуте и не успевают)
+            def slow(i):
+                i = i.lower()
+                return ("fast" not in i and "mini" not in i,
+                        "heavy" in i, "reason" in i and "non" not in i)
+            pref = sorted([i for i in ids if "grok" in i.lower()], key=slow)
             out = pref + [i for i in ids if i not in pref]
         elif provider == "deepseek":
             req = urllib.request.Request(
@@ -657,7 +662,8 @@ def _one(question, context, catalog, provider, key, model):
     # поменьше — ответ целый и приходит быстрее.
     gen = {"temperature": 0.2, "maxOutputTokens": 4096}
     if "gemini-3" in model:
-        gen["thinkingConfig"] = {"thinkingLevel": "low"}
+        # минимум размышлений: ответ по готовым статьям, думать почти не о чем
+        gen["thinkingConfig"] = {"thinkingLevel": "minimal"}
     elif "2.5-flash" in model:
         gen["thinkingConfig"] = {"thinkingBudget": 0}
     body = {"systemInstruction": {"parts": [{"text": _system()}]},
@@ -740,7 +746,8 @@ class handler(BaseHTTPRequestHandler):
                "key_from": {n: key_source(n) for n in KNOWN
                             if key_for(n)},
                "model": MODEL or (models_for(PROVIDER, KEY)[:1] or [""])[0],
-               "models": models_for(PROVIDER, KEY) if KEY else []}
+               "models": models_for(PROVIDER, KEY) if KEY else [],
+               "all": {n: models_for(n, key_for(n)) for n in have}}
         if not PROVIDER_OK:
             out["warning"] = ("в PAMYATKA_PROVIDER не gemini и не "
                               "deepseek — значение проигнорировано")
