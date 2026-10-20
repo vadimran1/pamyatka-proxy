@@ -1027,11 +1027,34 @@ UPD_URL = os.environ.get(
 _upd_cache = {"t": 0, "data": None}
 
 
+def _latest_tag():
+    """Последняя метка выпуска (d57…) — через API GitHub: ветка main на
+    raw.githubusercontent.com отдаёт старое ещё минут пять после выкладки."""
+    m = re.match(r"https://raw\.githubusercontent\.com/([^/]+)/([^/]+)/", UPD_URL + "/")
+    if not m:
+        return None
+    req = urllib.request.Request(
+        "https://api.github.com/repos/%s/%s/git/matching-refs/tags/d" % m.groups(),
+        headers={"User-Agent": "Pamyatka", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        refs = json.loads(r.read().decode("utf-8"))
+    nums = [int(x["ref"].rsplit("/d", 1)[1]) for x in refs
+            if re.search(r"/d\d+$", x.get("ref", ""))]
+    return "d%d" % max(nums) if nums else None
+
+
 def update_manifest():
-    """manifest.json с GitHub, минуту держим в памяти экземпляра."""
+    """manifest.json последнего выпуска, минуту держим в памяти экземпляра."""
     now = time.time()
     if _upd_cache["data"] is None or now - _upd_cache["t"] > 60:
-        req = urllib.request.Request(UPD_URL + "/manifest.json?t=%d" % int(now),
+        src = UPD_URL
+        try:
+            tag = _latest_tag()
+            if tag:
+                src = UPD_URL.rsplit("/", 1)[0] + "/" + tag
+        except Exception:
+            pass                            # лимит API — берём с ветки, как раньше
+        req = urllib.request.Request(src + "/manifest.json",
                                      headers={"User-Agent": "Pamyatka"})
         with urllib.request.urlopen(req, timeout=10) as r:
             _upd_cache["data"] = json.loads(r.read(1 << 20).decode("utf-8"))
