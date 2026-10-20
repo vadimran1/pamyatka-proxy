@@ -97,7 +97,7 @@ def models_for(provider, key):
             req = urllib.request.Request(
                 ORCA_BASE + "/v1/models",
                 headers={"Authorization": "Bearer " + key} if key else {})
-            with urllib.request.urlopen(req, timeout=20) as r:
+            with urllib.request.urlopen(req, timeout=4) as r:
                 ids = [m.get("id", "") for m in
                        json.loads(r.read().decode()).get("data", [])
                        if isinstance(m.get("id"), str)]
@@ -109,7 +109,7 @@ def models_for(provider, key):
             req = urllib.request.Request(
                 ODIROUTER_BASE + "/v1/models",
                 headers={"Authorization": "Bearer " + key})
-            with urllib.request.urlopen(req, timeout=20) as r:
+            with urllib.request.urlopen(req, timeout=4) as r:
                 ids = [m.get("id", "") for m in
                        json.loads(r.read().decode()).get("data", [])]
             # сперва Grok, и из них быстрые: «fast»/«mini» вперёд, тяжёлые и
@@ -124,7 +124,7 @@ def models_for(provider, key):
             req = urllib.request.Request(
                 "https://api.deepseek.com/models",
                 headers={"Authorization": "Bearer " + key})
-            with urllib.request.urlopen(req, timeout=20) as r:
+            with urllib.request.urlopen(req, timeout=4) as r:
                 ids = [m.get("id", "") for m in
                        json.loads(r.read().decode()).get("data", [])]
             # обычный чат быстрее и дешевле рассуждающего
@@ -134,7 +134,7 @@ def models_for(provider, key):
             req = urllib.request.Request(
                 "https://generativelanguage.googleapis.com/v1beta/models",
                 headers={"x-goog-api-key": key})
-            with urllib.request.urlopen(req, timeout=20) as r:
+            with urllib.request.urlopen(req, timeout=4) as r:
                 data = json.loads(r.read().decode())
             scored = []
             for m in data.get("models", []):
@@ -155,10 +155,12 @@ def models_for(provider, key):
     return _models_cache[provider]
 
 
-FALLBACK = {"gemini": ["gemini-2.5-flash", "gemini-2.0-flash",
-                       "gemini-flash-latest"],
+# Список моделей сервер спрашивает у сети при холодном старте — не больше
+# 4 секунд; не успел — берёт этот, иначе первый вопрос ждал бы полминуты
+FALLBACK = {"gemini": ["gemini-3.8-flash", "gemini-3.5-flash",
+                       "gemini-2.5-flash", "gemini-flash-latest"],
             "deepseek": ["deepseek-chat"],
-            "odirouter": ["grok-4.5"],
+            "odirouter": ["grok-4.6", "grok-4.5"],
             "orcarouter": ["orcarouter/free",
                            "deepseek/deepseek-v4-flash-free",
                            "z-ai/glm-5.3-flash-free"]}
