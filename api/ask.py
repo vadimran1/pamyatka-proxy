@@ -831,7 +831,13 @@ class handler(BaseHTTPRequestHandler):
                 if n == len(order) - 1:
                     break
         if last is not None:
-            raise last
+            # все сети отказали или не успели — отвечаем понятно, а не падаем
+            code = getattr(last, "code", None)
+            msg = ({401: "ключ не принят", 402: "кончились деньги на счёте",
+                    429: "слишком много вопросов — подождите минуту"}.get(code)
+                   or "нейросети не успели ответить — попробуйте ещё раз")
+            return self._send(429 if code == 429 else 503,
+                              {"error": msg, "provider": provider})
         provider = used
         _count_question(provider)
 
